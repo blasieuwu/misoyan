@@ -100,6 +100,8 @@ reply_list = [
     "im in your walls :D"
 ]
 
+os.makedirs("cache", exist_ok=True)
+
 class FullSystemControlPanel(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -398,7 +400,7 @@ class NowPlayingView(ui.LayoutView):
 
         user_handle = f"@{user.name}"
 
-        # 1. pick the track cover image string
+        # 1. pick image url
         if override_cover:
             track_cover_url = override_cover
         elif hasattr(track, 'artwork') and track.artwork:
@@ -406,7 +408,7 @@ class NowPlayingView(ui.LayoutView):
         else:
             track_cover_url = "https://cdn.discordapp.com/attachments/1454299112181600299/1520232653503201331/-sIJRmHN.jpg?ex=6a40727d&is=6a3f20fd&hm=56a9548e90f38e4f26adc02dfddd5d28542fd0a928eb8578ecc564aac0976882&"
 
-        # 2. duration parsing
+        # 2. track length
         if track.length:
             minutes = int((track.length // 1000) // 60)
             seconds = int((track.length // 1000) % 60)
@@ -414,14 +416,14 @@ class NowPlayingView(ui.LayoutView):
         else:
             duration = "--:--"
 
-        # 3. title formatting
+        # 3. titles
         track_title = track.title
         if (not track_title or track_title == "Unknown Title") and track.uri and "discordapp.com" in track.uri:
             track_title = track.uri.split("/")[-1].split("?")[0]
 
-        artist_name = track.author if (track.author and track.author != "Unknown Artist") else "nobody...?"
+        artist_name = track.author if (track.author and track.author != "Unknown Artist") else "local asset"
 
-        # 4. build component tree
+        # 4. wrap up layout tree
         display_prefix = " (file)" if (track.uri and "discordapp.com" in track.uri) else extra
         now_playing = ui.TextDisplay(f"-# now playing!{display_prefix} - requested by {user_handle} :3")
         cover_art = ui.MediaGallery(discord.MediaGalleryItem(track_cover_url))
@@ -846,7 +848,7 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
         track = tracks[0]
         
         # --- metadata extraction block ---
-        cover_io_data = None  # switch to storing raw stream bytes first!
+        has_extracted_cover = False
         if attachment.filename.lower().endswith(".mp3"):
             try:
                 file_bytes = await attachment.read()
@@ -856,22 +858,16 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
                 for key in audio.tags.keys():
                     if key.startswith('APIC'):
                         apic_frame = audio.tags[key]
-                        img_io = io.BytesIO(apic_frame.data)
-                        img_io.seek(0)
-                        cover_io_data = img_io  # assign the data stream here
+                        
+                        # 💡 save it straight into your web root!
+                        # using guild id so multiple servers don't overwrite each other's covers
+                        with open(f"cache/{interaction.guild.id}_cover.png", "wb") as f:
+                            f.write(apic_frame.data)
+                        
+                        has_extracted_cover = True
                         break
             except Exception as metadata_error:
                 print(f"[!] couldn't rip metadata tags from track: {metadata_error}")
-
-        # assemble the discord file out here where ruff can see it being checked!
-        cover_file = discord.File(cover_io_data, filename="cover.png") if cover_io_data else None
-        
-        # 💡 NEW: assign custom file variables straight to track extras so NowPlayingView is smart enough to find them later!
-        track.extras = {
-            "is_file": True,
-            "filename": attachment.filename,
-            "has_cover": bool(cover_file)
-        }
         # ----------------------------------
 
         # branch 1: if absolutely nothing is currently playing on the node
@@ -1064,41 +1060,21 @@ async def now_playing(interaction: discord.Interaction):
         return
 
     current_track = player.current
-    cover_file = None
     cover_url_override = None
 
-    # check if the active track is an uploaded discord attachment asset
-    if current_track.uri and "discordapp.com/attachments/" in current_track.uri:
-        filename_lower = current_track.uri.lower().split("?")[0]
-        if filename_lower.endswith(".mp3"):
-            try:
-                # fetch metadata bytes quickly using a local temporary session loop
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(current_track.uri) as response:
-                        if response.status == 200:
-                            file_bytes = await response.read()
-                            audio_stream = io.BytesIO(file_bytes)
-                            audio = MP3(audio_stream, ID3=ID3)
-                            
-                            for key in audio.tags.keys():
-                                if key.startswith('APIC'):
-                                    apic_frame = audio.tags[key]
-                                    img_io = io.BytesIO(apic_frame.data)
-                                    img_io.seek(0)
-                                    # build file and force override string
-                                    cover_file = discord.File(img_io, filename="cover.png")
-                                    cover_url_override = "attachment://cover.png"
-                                    break
-            except Exception as metadata_error:
-                print(f"[!] /now-playing failed to rip metadata tags: {metadata_error}")
+    # check if the track is a local file attachment and our cache has the image
+    local_image_file = f"cache/{interaction.guild.id}_cover.png"
+    if current_track.uri and "discordapp.com/attachments/" in current_track.uri and os.path.exists(local_image_file):
+        # 💡 pull your public domain directly from render's system environment!
+        render_url = os.environ.get("RENDER_EXTERNAL_URL")
+        if render_url:
+            # force clean trailing slashes
+            render_url = render_url.rstrip("/")
+            cover_url_override = f"{render_url}/{local_image_file}"
 
-    # compile view passing down our clean local link pointers
+    # feed the clean url directly into your base view!
     embed = NowPlayingView(current_track, interaction.user, override_cover=cover_url_override)
-    
-    if cover_file:
-        await interaction.response.send_message(view=embed, file=cover_file)
-    else:
-        await interaction.response.send_message(view=embed)
+    await interaction.response.send_message(view=embed)
 
 class LoopStatusView(ui.LayoutView):
     def __init__(self, mode: str, track, user: discord.User):
