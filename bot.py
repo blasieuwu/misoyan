@@ -393,22 +393,20 @@ async def leave(interaction: discord.Interaction):
         await interaction.response.send_message("i think my speakers malfunctioned", ephemeral=True)
 
 class NowPlayingView(ui.LayoutView):
-    def __init__(self, track, user, extra: str = "", cover_file: discord.File = None):
+    def __init__(self, track, user, extra: str = "", override_cover: str = None):
         super().__init__()
 
         user_handle = f"@{user.name}"
 
-        # 1. determine the track cover image path
-        if cover_file:
-            # if we successfully extracted a cover file, use the discord attachment hook layout
-            track_cover_url = "attachment://cover.png"
+        # 1. pick the track cover image string
+        if override_cover:
+            track_cover_url = override_cover
         elif hasattr(track, 'artwork') and track.artwork:
             track_cover_url = track.artwork
         else:
-            # fallback placeholder image
             track_cover_url = "https://cdn.discordapp.com/attachments/1454299112181600299/1520232653503201331/-sIJRmHN.jpg?ex=6a40727d&is=6a3f20fd&hm=56a9548e90f38e4f26adc02dfddd5d28542fd0a928eb8578ecc564aac0976882&"
 
-        # 2. get the track length
+        # 2. duration parsing
         if track.length:
             minutes = int((track.length // 1000) // 60)
             seconds = int((track.length // 1000) % 60)
@@ -416,28 +414,25 @@ class NowPlayingView(ui.LayoutView):
         else:
             duration = "--:--"
 
-        # 3. make the components
-        display_prefix = " (file)" if (track.uri and "discordapp.com" in track.uri) else extra
-        now_playing = ui.TextDisplay(f"-# now playing!{display_prefix} - requested by {user_handle} :3")
-        cover_art = ui.MediaGallery(discord.MediaGalleryItem(track_cover_url))
-
-        # 4. format title configurations
+        # 3. title formatting
         track_title = track.title
-        # if wavelink left the title as 'Unknown Title' or empty for a file, pull the clean filename from the URL route
         if (not track_title or track_title == "Unknown Title") and track.uri and "discordapp.com" in track.uri:
             track_title = track.uri.split("/")[-1].split("?")[0]
 
-        artist_name = track.author if (track.author and track.author != "Unknown Artist") else "local asset"
+        artist_name = track.author if (track.author and track.author != "Unknown Artist") else "nobody...?"
+
+        # 4. build component tree
+        display_prefix = " (file)" if (track.uri and "discordapp.com" in track.uri) else extra
+        now_playing = ui.TextDisplay(f"-# now playing!{display_prefix} - requested by {user_handle} :3")
+        cover_art = ui.MediaGallery(discord.MediaGalleryItem(track_cover_url))
         track_metadata = ui.TextDisplay(f"## {track_title}\nArtist: **{artist_name}**\nDuration: {duration}")
 
-        # 5. compile layout container
         container = ui.Container(
             now_playing,
             cover_art,
             track_metadata,
             accent_color=discord.Color.from_str("#e6ba81")
         )
-
         self.add_item(container)
 
 class QueuePopup(ui.LayoutView):
@@ -1068,16 +1063,16 @@ async def now_playing(interaction: discord.Interaction):
         await interaction.response.send_message("you seriously wanna see the void? nothing's playing...")
         return
 
-    await interaction.response.defer()
     current_track = player.current
     cover_file = None
+    cover_url_override = None
 
     # check if the active track is an uploaded discord attachment asset
     if current_track.uri and "discordapp.com/attachments/" in current_track.uri:
         filename_lower = current_track.uri.lower().split("?")[0]
         if filename_lower.endswith(".mp3"):
             try:
-                # fetch the audio file data chunks directly from discord's cdn network
+                # fetch metadata bytes quickly using a local temporary session loop
                 async with aiohttp.ClientSession() as session:
                     async with session.get(current_track.uri) as response:
                         if response.status == 200:
@@ -1090,18 +1085,20 @@ async def now_playing(interaction: discord.Interaction):
                                     apic_frame = audio.tags[key]
                                     img_io = io.BytesIO(apic_frame.data)
                                     img_io.seek(0)
+                                    # build file and force override string
                                     cover_file = discord.File(img_io, filename="cover.png")
+                                    cover_url_override = "attachment://cover.png"
                                     break
             except Exception as metadata_error:
                 print(f"[!] /now-playing failed to rip metadata tags: {metadata_error}")
 
-    # build the view layout passing the extracted image pointer directly down
-    embed = NowPlayingView(current_track, interaction.user, cover_file=cover_file)
+    # compile view passing down our clean local link pointers
+    embed = NowPlayingView(current_track, interaction.user, override_cover=cover_url_override)
     
     if cover_file:
-        await interaction.followup.send(view=embed, file=cover_file)
+        await interaction.response.send_message(view=embed, file=cover_file)
     else:
-        await interaction.followup.send(view=embed)
+        await interaction.response.send_message(view=embed)
 
 class LoopStatusView(ui.LayoutView):
     def __init__(self, mode: str, track, user: discord.User):
