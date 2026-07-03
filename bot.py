@@ -393,13 +393,19 @@ async def leave(interaction: discord.Interaction):
         await interaction.response.send_message("i think my speakers malfunctioned", ephemeral=True)
 
 class NowPlayingView(ui.LayoutView):
-    def __init__(self, track, user, extra: str = "", has_cover: bool = False):
+    def __init__(self, track, user, extra: str = ""):
         super().__init__()
 
         user_handle = f"@{user.name}"
 
-        # 1. get the track cover matching your file attachment rules
-        if has_cover:
+        # 💡 NEW: pull custom file metadata safely from track extras if they exist
+        track_extras = getattr(track, "extras", {}) or {}
+        is_file = track_extras.get("is_file", False)
+        has_cover = track_extras.get("has_cover", False)
+        filename = track_extras.get("filename", "local asset")
+
+        # 1. get the track cover
+        if is_file and has_cover:
             track_cover_url = "attachment://cover.png"
         elif hasattr(track, 'artwork') and track.artwork:
             track_cover_url = track.artwork
@@ -415,12 +421,19 @@ class NowPlayingView(ui.LayoutView):
             duration = "--:--"
 
         # 3. make the components
-        now_playing = ui.TextDisplay(f"-# now playing!{extra} - requested by {user_handle} :3")
+        display_prefix = " (file)" if is_file else extra
+        now_playing = ui.TextDisplay(f"-# now playing!{display_prefix} - requested by {user_handle} :3")
         cover_art = ui.MediaGallery(discord.MediaGalleryItem(track_cover_url))
 
-        # 4. artist and bottom text
-        artist_name = track.author or "unknown"
-        track_metadata = ui.TextDisplay(f"## {track.title}\nArtist: **{artist_name}**\nDuration: {duration}")
+        # 4. dynamically change the text configuration if it's an uploaded file
+        if is_file:
+            track_title_text = filename
+            artist_name = track.author if (track.author and track.author != "Unknown Artist") else "nobody...?"
+        else:
+            track_title_text = track.title
+            artist_name = track.author or "nobody...?"
+
+        track_metadata = ui.TextDisplay(f"## {track_title_text}\nArtist: **{artist_name}**\nDuration: {duration}")
 
         # 5. make the actual container/embed
         container = ui.Container(
@@ -862,11 +875,22 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
 
         # assemble the discord file out here where ruff can see it being checked!
         cover_file = discord.File(cover_io_data, filename="cover.png") if cover_io_data else None
+        
+        # 💡 NEW: assign custom file variables straight to track extras so NowPlayingView is smart enough to find them later!
+        track.extras = {
+            "is_file": True,
+            "filename": attachment.filename,
+            "has_cover": bool(cover_file)
+        }
         # ----------------------------------
 
         # branch 1: if absolutely nothing is currently playing on the node
         if not player.playing:
             await player.play(track)
+            
+            # brief millisecond breath to populate player states before displaying card
+            await asyncio.sleep(0.5)
+            
             view_embed = FilePlayingView(track, interaction.user, attachment, has_cover=bool(cover_file)) 
             
             if cover_file:
@@ -882,6 +906,9 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
             
             # 2. force an immediate skip task to kill the active stream smoothly
             await player.skip(force=True)
+            
+            # wait briefly for the skipped stream to cycle out and bind metadata
+            await asyncio.sleep(0.5)
             
             view_embed = FilePlayingView(track, interaction.user, attachment, has_cover=bool(cover_file))
             
