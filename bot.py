@@ -744,12 +744,12 @@ class FilePlayingView(ui.LayoutView):
             duration_text = "93:663? wait what-"
 
         # 2. top layout section details
-        top_text = f"-# now playing! (file) - requested by {user_handle}. :3\n## {attachment.filename}\nduration: {duration_text}"
+        top_text = f"-# now playing! (file) - requested by {user_handle} :3\n## {attachment.filename}\nduration: {duration_text}"
         
         if hasattr(track, 'artwork') and track.artwork:
             display_thumbnail = track.artwork
         else:
-            display_thumbnail = "https://cdn.discordapp.com/attachments/1454299112181600299/1520232653503201331/-sIJRmHN.jpg?ex=6a40727d&is=6a3f20fd&hm=56a9548e90f38e4f26adc02dfddd5d28542fd0a928eb8578ecc564aac0976882&"
+            display_thumbnail = user.display_avatar.url
 
         top_section = ui.Section(
             ui.TextDisplay(top_text),
