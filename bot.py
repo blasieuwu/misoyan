@@ -1,4 +1,3 @@
-# pylint: disable=C0301,C0303,C0114,C0115,C0116,R0903,R0912,R0914,R0915,W0718,W0603,W0613,C0411,C0103,W0602,W0621,C0302
 import asyncio
 import os
 import io
@@ -394,16 +393,18 @@ async def leave(interaction: discord.Interaction):
         await interaction.response.send_message("i think my speakers malfunctioned", ephemeral=True)
 
 class NowPlayingView(ui.LayoutView):
-    def __init__(self, track, user, extra: str = ""):
+    def __init__(self, track, user, extra: str = "", has_cover: bool = False):
         super().__init__()
 
         user_handle = f"@{user.name}"
 
-        # 1. get the track cover
-        if hasattr(track, 'artwork') and track.artwork:
+        # 1. get the track cover matching your file attachment rules
+        if has_cover:
+            track_cover_url = "attachment://cover.png"
+        elif hasattr(track, 'artwork') and track.artwork:
             track_cover_url = track.artwork
         else:
-            track_cover_url = "https://cdn.discordapp.com/attachments/1454299112181600299/1520232653503201331/-sIJRmHN.jpg?ex=6a40727d&is=6a3f20fd&hm=56a9548e90f38e4f26adc02dfddd5d28542fd0a928eb8578ecc564aac0976882&" # a cool sky picture placeholder
+            track_cover_url = "https://cdn.discordapp.com/attachments/1454299112181600299/1520232653503201331/-sIJRmHN.jpg?ex=6a40727d&is=6a3f20fd&hm=56a9548e90f38e4f26adc02dfddd5d28542fd0a928eb8578ecc564aac0976882&"
 
         # 2. get the track length
         if track.length:
@@ -1046,7 +1047,14 @@ async def now_playing(interaction: discord.Interaction):
         return
 
     current_track = player.current
-    embed = NowPlayingView(current_track, interaction.user)
+    
+    # check if the track uri points to a discord file attachment stream
+    is_file_attachment = False
+    if current_track.uri and "discordapp.com/attachments/" in current_track.uri:
+        is_file_attachment = True
+
+    # pass the check flag straight down into the updated view configuration
+    embed = NowPlayingView(current_track, interaction.user, has_cover=is_file_attachment)
     await interaction.response.send_message(view=embed)
 
 class LoopStatusView(ui.LayoutView):
