@@ -33,6 +33,7 @@ use misoyan's speakers :o
 | `/replay` | repeat the song |
 | `/skip` | skip the song if its bad bleh |
 | `/previous` | play the previous song |
+| `/now-playing` | see what's playing rn |
 
 oh btw, you can check [the node that powers her speakers](https://github.com/blasieuwu/misoyan-lavalink-node)
 
@@ -59,6 +60,7 @@ here are some cool commands you can use:
 | `/suicide` | **dont ever run this on m̶̗̼͕̙͈̙͔̫̗̦̬̈̔̉͊ͅȅ̵̻̟̙͈̗̚͜** (blasie-only) |
 | `/settings` | change stuff inside me :o |
 | `/restrict` | **dont end up in this list.** |
+| `/webhook` | (only ever used for embed view tests - blasie) |
 
 ---
 ### smol stuff that are cute
