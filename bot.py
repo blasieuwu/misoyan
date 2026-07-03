@@ -400,7 +400,6 @@ class NowPlayingView(ui.LayoutView):
 
         user_handle = f"@{user.name}"
 
-        # 1. pick image url
         if override_cover:
             track_cover_url = override_cover
         elif hasattr(track, 'artwork') and track.artwork:
@@ -408,7 +407,6 @@ class NowPlayingView(ui.LayoutView):
         else:
             track_cover_url = "https://cdn.discordapp.com/attachments/1454299112181600299/1520232653503201331/-sIJRmHN.jpg?ex=6a40727d&is=6a3f20fd&hm=56a9548e90f38e4f26adc02dfddd5d28542fd0a928eb8578ecc564aac0976882&"
 
-        # 2. track length
         if track.length:
             minutes = int((track.length // 1000) // 60)
             seconds = int((track.length // 1000) % 60)
@@ -416,14 +414,12 @@ class NowPlayingView(ui.LayoutView):
         else:
             duration = "--:--"
 
-        # 3. titles
         track_title = track.title
         if (not track_title or track_title == "Unknown Title") and track.uri and "discordapp.com" in track.uri:
             track_title = track.uri.split("/")[-1].split("?")[0]
 
         artist_name = track.author if (track.author and track.author != "Unknown Artist") else "local asset"
 
-        # 4. wrap up layout tree
         display_prefix = " (file)" if (track.uri and "discordapp.com" in track.uri) else extra
         now_playing = ui.TextDisplay(f"-# now playing!{display_prefix} - requested by {user_handle} :3")
         cover_art = ui.MediaGallery(discord.MediaGalleryItem(track_cover_url))
@@ -434,6 +430,59 @@ class NowPlayingView(ui.LayoutView):
             cover_art,
             track_metadata,
             accent_color=discord.Color.from_str("#e6ba81")
+        )
+        self.add_item(container)
+
+
+class FilePlayingView(ui.LayoutView):
+    def __init__(self, track, user: discord.User, attachment: discord.Attachment, has_cover: bool = False):
+        super().__init__()
+
+        user_handle = f"@{user.name}"
+
+        if track.length and track.length > 0:
+            minutes = int((track.length // 1000) // 60)
+            seconds = int((track.length // 1000) % 60)
+            duration_text = f"{minutes}:{seconds:02d}"
+        else:
+            duration_text = "00:00"
+
+        top_text = f"-# now playing! (file) - requested by {user_handle} :3\n## {attachment.filename}\nduration: {duration_text}"
+        
+        # if the track has an extracted cover inside our render cache folder, display it over our web server
+        if has_cover:
+            render_url = os.environ.get("RENDER_EXTERNAL_URL", "").rstrip("/")
+            display_thumbnail = f"{render_url}/cache/{user.mutual_guilds[0].id if user.mutual_guilds else 'default'}_cover.png" if render_url else user.display_avatar.url
+            
+            # fallback to user verification if mutual guilds layout checking is too loose
+            if "default" in display_thumbnail and hasattr(attachment, "guild"):
+                display_thumbnail = f"{render_url}/cache/{attachment.guild.id}_cover.png"
+        elif hasattr(track, 'artwork') and track.artwork:
+            display_thumbnail = track.artwork
+        else:
+            display_thumbnail = user.display_avatar.url
+
+        top_section = ui.Section(
+            ui.TextDisplay(top_text),
+            accessory=ui.Thumbnail(display_thumbnail)
+        )
+
+        has_title = track.title and not track.title.startswith("http") and track.title != attachment.filename
+        has_author = track.author and track.author != "Unknown Artist" and track.author != ""
+
+        layout_components = [top_section]
+
+        if has_title or has_author:
+            meta_title = track.title if has_title else "unknown title"
+            meta_artist = track.author if has_author else "unknown artist"
+            bottom_text = f"## {meta_title}\nartist: **{meta_artist}**"
+            
+            layout_components.append(ui.Separator()) 
+            layout_components.append(ui.TextDisplay(bottom_text))
+
+        container = ui.Container(
+            *layout_components,
+            accent_color=discord.Color.from_str("#F9C788")
         )
         self.add_item(container)
 
@@ -739,60 +788,6 @@ async def view_queue(interaction: discord.Interaction):
     # pass the view instance directly here!
     await interaction.response.send_message(view=view_embed)
 
-class FilePlayingView(ui.LayoutView):
-    def __init__(self, track, user: discord.User, attachment: discord.Attachment, has_cover: bool = False):
-        super().__init__()
-
-        user_handle = f"@{user.name}"
-
-        # 1. duration evaluation block
-        if track.length and track.length > 0:
-            minutes = int((track.length // 1000) // 60)
-            seconds = int((track.length // 1000) % 60)
-            duration_text = f"{minutes}:{seconds:02d}"
-        else:
-            duration_text = "93:663? wait what-"
-
-        # 2. top layout section details
-        top_text = f"-# now playing! (file) - requested by {user_handle} :3\n## {attachment.filename}\nduration: {duration_text}"
-        
-        # if the command attached a cover image file to the payload, display it
-        if has_cover:
-            display_thumbnail = "attachment://cover.png"
-        elif hasattr(track, 'artwork') and track.artwork:
-            display_thumbnail = track.artwork
-        else:
-            display_thumbnail = user.display_avatar.url
-
-        top_section = ui.Section(
-            ui.TextDisplay(top_text),
-            accessory=ui.Thumbnail(display_thumbnail)
-        )
-
-        # 3. conditional tracking with a native separator line
-        has_title = track.title and not track.title.startswith("http") and track.title != attachment.filename
-        has_author = track.author and track.author != "Unknown Artist" and track.author != ""
-
-        # compile our list of component pieces dynamically
-        layout_components = [top_section]
-
-        if has_title or has_author:
-            meta_title = track.title if has_title else "unknown title"
-            meta_artist = track.author if has_author else "unknown artist"
-            bottom_text = f"## {meta_title}\nartist: **{meta_artist}**"
-            
-            # append the layout rule/divider first, then stack the metadata section
-            layout_components.append(ui.Separator()) 
-            layout_components.append(ui.TextDisplay(bottom_text))
-
-        # 4. drop the array into the single cozy master container block
-        container = ui.Container(
-            *layout_components,
-            accent_color=discord.Color.from_str("#F9C788")
-        )
-
-        self.add_item(container)
-
 @bot.tree.command(name="play-file", description="give me your audio file :)")
 @app_commands.describe(
     attachment="drag and drop or select an audio file (.mp3, .wav, .ogg, etc.) from your device",
@@ -816,7 +811,6 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
         await interaction.response.send_message("join a voice channel first, you dummy! i need an audience. :c", ephemeral=True)
         return
 
-    # validate that it's actually a readable audio format
     valid_extensions = [".mp3", ".wav", ".ogg", ".flac", ".m4a"]
     if not any(attachment.filename.lower().endswith(ext) for ext in valid_extensions):
         await interaction.response.send_message("you sure this is an audio file? doesnt look like it", ephemeral=True)
@@ -830,7 +824,7 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
         player: wavelink.Player = node.get_player(interaction.guild.id)
 
         if not player or not player.connected:
-            misoyan_settings["is_connecting"] = True  # lock sentinel out during manual file upload plays
+            misoyan_settings["is_connecting"] = True
             print(f"[play-file] connecting to vc: {user_channel.name}")
             player = await user_channel.connect(cls=wavelink.Player)
             global target_voice_channel_id
@@ -838,7 +832,6 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
             misoyan_settings["need_reconnection"] = False
             await asyncio.sleep(1.5)
 
-        # fetch playable node data from attachment url
         tracks = await wavelink.Playable.search(attachment.url)
         
         if not tracks:
@@ -859,8 +852,7 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
                     if key.startswith('APIC'):
                         apic_frame = audio.tags[key]
                         
-                        # 💡 save it straight into your web root!
-                        # using guild id so multiple servers don't overwrite each other's covers
+                        # save the cover art directly into the cache directory using guild id
                         with open(f"cache/{interaction.guild.id}_cover.png", "wb") as f:
                             f.write(apic_frame.data)
                         
@@ -870,49 +862,26 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
                 print(f"[!] couldn't rip metadata tags from track: {metadata_error}")
         # ----------------------------------
 
-        # branch 1: if absolutely nothing is currently playing on the node
         if not player.playing:
             await player.play(track)
-            
-            # brief millisecond breath to populate player states before displaying card
-            await asyncio.sleep(0.5)
-            
-            view_embed = FilePlayingView(track, interaction.user, attachment, has_cover=bool(cover_file)) 
-            
-            if cover_file:
-                await interaction.followup.send(view=view_embed, file=cover_file)
-            else:
-                await interaction.followup.send(view=view_embed)
+            view_embed = FilePlayingView(track, interaction.user, attachment, has_cover=has_extracted_cover) 
+            await interaction.followup.send(view=view_embed)
             return
 
-        # branch 2: if a song is playing, respect your timing choices
         if timing == "replace":
-            # 1. append the fresh file track directly to the front of the queue
-            player.queue.put_at(0, track)
-            
-            # 2. force an immediate skip task to kill the active stream smoothly
+            player.queue.put_at_front(track)
             await player.skip(force=True)
-            
-            # wait briefly for the skipped stream to cycle out and bind metadata
-            await asyncio.sleep(0.5)
-            
-            view_embed = FilePlayingView(track, interaction.user, attachment, has_cover=bool(cover_file))
-            
-            if cover_file:
-                await interaction.followup.send(view=view_embed, file=cover_file)
-            else:
-                await interaction.followup.send(view=view_embed)
+            view_embed = FilePlayingView(track, interaction.user, attachment, has_cover=has_extracted_cover)
+            await interaction.followup.send(view=view_embed)
             print(f"[music - play-file] replaced active track with file: '{attachment.filename}'")
 
         elif timing == "next":
-            # slide it into position 0 in the track list array so it hits the player next
             player.queue.put_at(0, track)
             embed = QueuePopup(track, interaction.user, "playing next (file)!")
             await interaction.followup.send(view=embed)
             print(f"[music - play-file] forced file '{attachment.filename}' to play next")
 
-        else: # "queue" (default)
-            # append straight to the end of the line container
+        else:
             player.queue.put(track)
             pos_number = int(len(player.queue))
             embed = QueuePopup(track, interaction.user, "added file to queue!", pos_number)
@@ -923,7 +892,7 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
         print(f"[!] so my speakers broke...: {e}")
         await interaction.followup.send(f"yeah my speaker broken lmaoo: `{e}`", ephemeral=True)
     finally:
-        misoyan_settings["is_connecting"] = False  # release lock safely
+        misoyan_settings["is_connecting"] = False
 
 @bot.tree.command(name="status", description="check out my internal self :D")
 async def systemstatus(interaction: discord.Interaction):
@@ -1062,20 +1031,18 @@ async def now_playing(interaction: discord.Interaction):
     current_track = player.current
     cover_url_override = None
 
-    # check if the track is a local file attachment and our cache has the image
+    # check if the track is an attachment file and we have a cached cover image saved
     local_image_file = f"cache/{interaction.guild.id}_cover.png"
     if current_track.uri and "discordapp.com/attachments/" in current_track.uri and os.path.exists(local_image_file):
-        # 💡 pull your public domain directly from render's system environment!
         render_url = os.environ.get("RENDER_EXTERNAL_URL")
         if render_url:
-            # force clean trailing slashes
             render_url = render_url.rstrip("/")
             cover_url_override = f"{render_url}/{local_image_file}"
 
-    # feed the clean url directly into your base view!
+    # compile your base layout view cleanly passing down the public URL string
     embed = NowPlayingView(current_track, interaction.user, override_cover=cover_url_override)
     await interaction.response.send_message(view=embed)
-
+    
 class LoopStatusView(ui.LayoutView):
     def __init__(self, mode: str, track, user: discord.User):
         super().__init__()
