@@ -1,0 +1,42 @@
+name: python runtime
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+    
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout code
+      uses: actions/checkout@v4
+
+    - name: set up python (3.11)
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: do a dry run check
+      run: |
+        # this checks if python can compile and load the entire bot file without crashing on syntax or imports
+        python -c "
+        try:
+            import bot
+            print('oh it managed to compile correctly')
+        except Exception as e:
+            import sys
+            # if it fails cuz no authentication its a good thing (runtime syntax is valid)
+            if 'LoginFailure' in str(type(e)) or 'ConfigurationError' in str(e):
+                print('bot tried to authenticate (ofc it cant). works tho')
+                sys.exit(0)
+            else:
+                print(f'ah shit it broke: {e}')
+                sys.exit(1)
+        "
