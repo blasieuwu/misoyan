@@ -398,11 +398,12 @@ class NowPlayingView(ui.LayoutView):
 
         user_handle = f"@{user.name}"
 
-        # 💡 NEW: pull custom file metadata safely from track extras if they exist
+        # pull custom file metadata safely from track extras if they exist
         track_extras = getattr(track, "extras", {}) or {}
         is_file = track_extras.get("is_file", False)
         has_cover = track_extras.get("has_cover", False)
-        filename = track_extras.get("filename", "local asset")
+        # fallback directly to track.title or a generic string instead of checking local scopes
+        filename = track_extras.get("filename", track.title or "attachment")
 
         # 1. get the track cover
         if is_file and has_cover:
@@ -428,10 +429,10 @@ class NowPlayingView(ui.LayoutView):
         # 4. dynamically change the text configuration if it's an uploaded file
         if is_file:
             track_title_text = filename
-            artist_name = track.author if (track.author and track.author != "Unknown Artist") else "nobody...?"
+            artist_name = track.author if (track.author and track.author != "Unknown Artist") else "local asset"
         else:
             track_title_text = track.title
-            artist_name = track.author or "nobody...?"
+            artist_name = track.author or "unknown"
 
         track_metadata = ui.TextDisplay(f"## {track_title_text}\nArtist: **{artist_name}**\nDuration: {duration}")
 
