@@ -770,7 +770,7 @@ class FilePlayingView(ui.LayoutView):
             
             # append the layout rule/divider first, then stack the metadata section
             layout_components.append(ui.Separator()) 
-            layout_components.append(ui.Section(ui.TextDisplay(bottom_text)))
+            layout_components.append(ui.TextDisplay(bottom_text))
 
         # 4. drop the array into the single cozy master container block
         container = ui.Container(
