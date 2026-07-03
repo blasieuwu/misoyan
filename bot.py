@@ -897,7 +897,7 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
         # branch 2: if a song is playing, respect your timing choices
         if timing == "replace":
             # 1. append the fresh file track directly to the front of the queue
-            player.queue.put_at_front(track)
+            player.queue.put_at(0, track)
             
             # 2. force an immediate skip task to kill the active stream smoothly
             await player.skip(force=True)
