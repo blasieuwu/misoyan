@@ -841,7 +841,7 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
         track = tracks[0]
         
         # --- metadata extraction block ---
-        cover_file = None
+        cover_io_data = None  # switch to storing raw stream bytes first!
         if attachment.filename.lower().endswith(".mp3"):
             try:
                 file_bytes = await attachment.read()
@@ -853,10 +853,13 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
                         apic_frame = audio.tags[key]
                         img_io = io.BytesIO(apic_frame.data)
                         img_io.seek(0)
-                        cover_file = discord.File(img_io, filename="cover.png")
+                        cover_io_data = img_io  # assign the data stream here
                         break
             except Exception as metadata_error:
                 print(f"[!] couldn't rip metadata tags from track: {metadata_error}")
+
+        # assemble the discord file out here where ruff can see it being checked!
+        cover_file = discord.File(cover_io_data, filename="cover.png") if cover_io_data else None
         # ----------------------------------
 
         # branch 1: if absolutely nothing is currently playing on the node
