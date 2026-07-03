@@ -1,8 +1,7 @@
+# pylint: disable=C0301,C0303,C0114,C0115,C0116,R0903,R0912,R0914,R0915,W0718,W0603
 import asyncio
 import os
 import io
-from mutagen.mp3 import MP3 # for the file cover art embedding
-from mutagen.id3 import ID3
 import random  # keeps random.choice from crashing her
 import threading  # handles the background web server thread
 import aiohttp # for webhook avatar
@@ -11,6 +10,8 @@ import discord
 from discord import app_commands, ui
 from discord.ext import commands, tasks
 import wavelink  # this powers her speakers
+from mutagen.mp3 import MP3 # for the file cover art embedding
+from mutagen.id3 import ID3
 
 # make bot can read the word "misoyan"
 intents = discord.Intents.default()
@@ -749,7 +750,7 @@ class FilePlayingView(ui.LayoutView):
         # 2. top layout section details
         top_text = f"-# now playing! (file) - requested by {user_handle} :3\n## {attachment.filename}\nduration: {duration_text}"
         
-        # determine thumbnail based on embedded file cover, wavelink cache, or avatar fallback
+        # if the command attached a cover image file to the payload, display it
         if has_cover:
             display_thumbnail = "attachment://cover.png"
         elif hasattr(track, 'artwork') and track.artwork:
@@ -865,8 +866,12 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
         # branch 1: if absolutely nothing is currently playing on the node
         if not player.playing:
             await player.play(track)
-            view_embed = FilePlayingView(track, interaction.user, attachment) 
-            await interaction.followup.send(view=view_embed)
+            view_embed = FilePlayingView(track, interaction.user, attachment, has_cover=bool(cover_file)) 
+            
+            if cover_file:
+                await interaction.followup.send(view=view_embed, file=cover_file)
+            else:
+                await interaction.followup.send(view=view_embed)
             return
 
         # branch 2: if a song is playing, respect your timing choices
@@ -877,8 +882,12 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
             # 2. force an immediate skip task to kill the active stream smoothly
             await player.skip(force=True)
             
-            view_embed = FilePlayingView(track, interaction.user, attachment)
-            await interaction.followup.send(view=view_embed)
+            view_embed = FilePlayingView(track, interaction.user, attachment, has_cover=bool(cover_file))
+            
+            if cover_file:
+                await interaction.followup.send(view=view_embed, file=cover_file)
+            else:
+                await interaction.followup.send(view=view_embed)
             print(f"[music - play-file] replaced active track with file: '{attachment.filename}'")
 
         elif timing == "next":
