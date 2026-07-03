@@ -1,5 +1,8 @@
 import asyncio
 import os
+import io
+from mutagen.mp3 import MP3 # for the file cover art embedding
+from mutagen.id3 import ID3
 import random  # keeps random.choice from crashing her
 import threading  # handles the background web server thread
 import aiohttp # for webhook avatar
@@ -730,7 +733,7 @@ async def view_queue(interaction: discord.Interaction):
     await interaction.response.send_message(view=view_embed)
 
 class FilePlayingView(ui.LayoutView):
-    def __init__(self, track, user: discord.User, attachment: discord.Attachment):
+    def __init__(self, track, user: discord.User, attachment: discord.Attachment, has_cover: bool = False):
         super().__init__()
 
         user_handle = f"@{user.name}"
@@ -746,7 +749,10 @@ class FilePlayingView(ui.LayoutView):
         # 2. top layout section details
         top_text = f"-# now playing! (file) - requested by {user_handle} :3\n## {attachment.filename}\nduration: {duration_text}"
         
-        if hasattr(track, 'artwork') and track.artwork:
+        # determine thumbnail based on embedded file cover, wavelink cache, or avatar fallback
+        if has_cover:
+            display_thumbnail = "attachment://cover.png"
+        elif hasattr(track, 'artwork') and track.artwork:
             display_thumbnail = track.artwork
         else:
             display_thumbnail = user.display_avatar.url
@@ -834,6 +840,25 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
 
         track = tracks[0]
         
+        # --- metadata extraction block ---
+        cover_file = None
+        if attachment.filename.lower().endswith(".mp3"):
+            try:
+                file_bytes = await attachment.read()
+                audio_stream = io.BytesIO(file_bytes)
+                audio = MP3(audio_stream, ID3=ID3)
+                
+                for key in audio.tags.keys():
+                    if key.startswith('APIC'):
+                        apic_frame = audio.tags[key]
+                        img_io = io.BytesIO(apic_frame.data)
+                        img_io.seek(0)
+                        cover_file = discord.File(img_io, filename="cover.png")
+                        break
+            except Exception as metadata_error:
+                print(f"[!] couldn't rip metadata tags from track: {metadata_error}")
+        # ----------------------------------
+
         # branch 1: if absolutely nothing is currently playing on the node
         if not player.playing:
             await player.play(track)

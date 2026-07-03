@@ -3,3 +3,4 @@ PyNaCl
 davey
 wavelink
 yt-dlp
+mutagen
