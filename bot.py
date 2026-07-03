@@ -867,7 +867,7 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
             return
 
         if timing == "replace":
-            player.queue.put_at_front(track)
+            player.queue.put_at(0, track)
             await player.skip(force=True)
             view_embed = FilePlayingView(track, interaction.user, attachment, guild=interaction.guild, has_cover=has_extracted_cover)
             await interaction.followup.send(view=view_embed)
