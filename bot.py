@@ -435,7 +435,8 @@ class NowPlayingView(ui.LayoutView):
 
 
 class FilePlayingView(ui.LayoutView):
-    def __init__(self, track, user: discord.User, attachment: discord.Attachment, has_cover: bool = False):
+    # 💡 add a guild parameter straight to the view context
+    def __init__(self, track, user: discord.User, attachment: discord.Attachment, guild: discord.Guild = None, has_cover: bool = False):
         super().__init__()
 
         user_handle = f"@{user.name}"
@@ -449,14 +450,11 @@ class FilePlayingView(ui.LayoutView):
 
         top_text = f"-# now playing! (file) - requested by {user_handle} :3\n## {attachment.filename}\nduration: {duration_text}"
         
-        # if the track has an extracted cover inside our render cache folder, display it over our web server
+        # 💡 cleanly pull the exact guild id context without relying on mutual_guild lists
         if has_cover:
             render_url = os.environ.get("RENDER_EXTERNAL_URL", "").rstrip("/")
-            display_thumbnail = f"{render_url}/cache/{user.mutual_guilds[0].id if user.mutual_guilds else 'default'}_cover.png" if render_url else user.display_avatar.url
-            
-            # fallback to user verification if mutual guilds layout checking is too loose
-            if "default" in display_thumbnail and hasattr(attachment, "guild"):
-                display_thumbnail = f"{render_url}/cache/{attachment.guild.id}_cover.png"
+            guild_id = guild.id if guild else (attachment.guild.id if hasattr(attachment, "guild") else "default")
+            display_thumbnail = f"{render_url}/cache/{guild_id}_cover.png" if render_url else user.display_avatar.url
         elif hasattr(track, 'artwork') and track.artwork:
             display_thumbnail = track.artwork
         else:
@@ -864,14 +862,14 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
 
         if not player.playing:
             await player.play(track)
-            view_embed = FilePlayingView(track, interaction.user, attachment, has_cover=has_extracted_cover) 
+            view_embed = FilePlayingView(track, interaction.user, attachment, guild=interaction.guild, has_cover=has_extracted_cover) 
             await interaction.followup.send(view=view_embed)
             return
 
         if timing == "replace":
             player.queue.put_at_front(track)
             await player.skip(force=True)
-            view_embed = FilePlayingView(track, interaction.user, attachment, has_cover=has_extracted_cover)
+            view_embed = FilePlayingView(track, interaction.user, attachment, guild=interaction.guild, has_cover=has_extracted_cover)
             await interaction.followup.send(view=view_embed)
             print(f"[music - play-file] replaced active track with file: '{attachment.filename}'")
 
