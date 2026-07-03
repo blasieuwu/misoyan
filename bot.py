@@ -93,7 +93,7 @@ reply_list = [
     "fih party",
     "spinning fish",
     "me and fih :3",
-    "🐟",  # fixed: added missing comma separator here so string literals don't merge!
+    "🐟", 
     "im in your walls :D"
 ]
 
@@ -535,8 +535,10 @@ async def play(interaction: discord.Interaction, search: str, timing: str = "que
 
         # if a song's playing
         if timing == "replace":
-            # overwrite the active speaker track instantly
-            await player.play(track)
+            player.queue.put_at(0, track)
+
+            await player.skip()
+            
             embed = NowPlayingView(track, interaction.user, " (replaced)")
             await interaction.followup.send(view=embed)
             print(f"[music] replaced active track with '{track.title}'")
@@ -727,9 +729,68 @@ async def view_queue(interaction: discord.Interaction):
     # pass the view instance directly here!
     await interaction.response.send_message(view=view_embed)
 
+class FilePlayingView(ui.LayoutView):
+    def __init__(self, track, user: discord.User, attachment: discord.Attachment):
+        super().__init__()
+
+        user_handle = f"@{user.name}"
+
+        # 1. duration evaluation block
+        if track.length and track.length > 0:
+            minutes = int((track.length // 1000) // 60)
+            seconds = int((track.length // 1000) % 60)
+            duration_text = f"{minutes}:{seconds:02d}"
+        else:
+            duration_text = "93:663? wait what-"
+
+        # 2. top layout section details
+        top_text = f"-# now playing! (file) - requested by {user_handle}. :3\n## {attachment.filename}\nduration: {duration_text}"
+        
+        if hasattr(track, 'artwork') and track.artwork:
+            display_thumbnail = track.artwork
+        else:
+            display_thumbnail = "https://cdn.discordapp.com/attachments/1454299112181600299/1520232653503201331/-sIJRmHN.jpg?ex=6a40727d&is=6a3f20fd&hm=56a9548e90f38e4f26adc02dfddd5d28542fd0a928eb8578ecc564aac0976882&"
+
+        top_section = ui.Section(
+            ui.TextDisplay(top_text),
+            accessory=ui.Thumbnail(display_thumbnail)
+        )
+
+        # 3. conditional tracking with a native separator line
+        has_title = track.title and not track.title.startswith("http") and track.title != attachment.filename
+        has_author = track.author and track.author != "Unknown Artist" and track.author != ""
+
+        # compile our list of component pieces dynamically
+        layout_components = [top_section]
+
+        if has_title or has_author:
+            meta_title = track.title if has_title else "unknown title"
+            meta_artist = track.author if has_author else "unknown artist"
+            bottom_text = f"## {meta_title}\nartist: **{meta_artist}**"
+            
+            # append the layout rule/divider first, then stack the metadata section
+            layout_components.append(ui.Separator()) 
+            layout_components.append(ui.Section(ui.TextDisplay(bottom_text)))
+
+        # 4. drop the array into the single cozy master container block
+        container = ui.Container(
+            *layout_components,
+            accent_color=discord.Color.from_str("#F9C788")
+        )
+
+        self.add_item(container)
+
 @bot.tree.command(name="play-file", description="give me your audio file :)")
-@app_commands.describe(attachment="drag and drop or select an audio file (.mp3, .wav, .ogg, etc.) from your device")
-async def play_file(interaction: discord.Interaction, attachment: discord.Attachment):
+@app_commands.describe(
+    attachment="drag and drop or select an audio file (.mp3, .wav, .ogg, etc.) from your device",
+    timing="how to prioritize this track in the queue layout"
+)
+@app_commands.choices(timing=[
+    app_commands.Choice(name="add to queue (default)", value="queue"),
+    app_commands.Choice(name="play next", value="next"),
+    app_commands.Choice(name="replace current track", value="replace")
+])
+async def play_file(interaction: discord.Interaction, attachment: discord.Attachment, timing: str = "queue"):
     if not misoyan_settings["all_features"]:
         await interaction.response.send_message("my speakers are off, mb (disabled)", ephemeral=True)
         return
@@ -762,8 +823,9 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
             global target_voice_channel_id
             target_voice_channel_id = user_channel.id
             misoyan_settings["need_reconnection"] = False
+            await asyncio.sleep(1.5)
 
-        # this lets us play the file
+        # fetch playable node data from attachment url
         tracks = await wavelink.Playable.search(attachment.url)
         
         if not tracks:
@@ -771,22 +833,40 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
             return
 
         track = tracks[0]
-        await player.play(track)
         
-        embed = discord.Embed(
-            title="now playing! (file)",
-            description=f"**{attachment.filename}**",
-            color=0xffcc80
-        )
-        if track.length:
-            minutes = int((track.length // 1000) // 60)
-            seconds = int((track.length // 1000) % 60)
-            embed.add_field(name="duration", value=f"`{minutes}:{seconds:02d}`", inline=True)
-            
-        embed.set_footer(text=f"requested by {interaction.user.name} :3")
-        await interaction.followup.send(embed=embed)
+        # branch 1: if absolutely nothing is currently playing on the node
+        if not player.playing:
+            await player.play(track)
+            view_embed = FilePlayingView(track, interaction.user, attachment) 
+            await interaction.followup.send(view=view_embed)
+            return
 
-        print(f"[music - play-file] now playing '{attachment.filename}'")
+        # branch 2: if a song is playing, respect your timing choices
+        if timing == "replace":
+            # 1. append the fresh file track directly to the front of the queue
+            player.queue.put_at_front(track)
+            
+            # 2. force an immediate skip task to kill the active stream smoothly
+            await player.skip(force=True)
+            
+            view_embed = FilePlayingView(track, interaction.user, attachment)
+            await interaction.followup.send(view=view_embed)
+            print(f"[music - play-file] replaced active track with file: '{attachment.filename}'")
+
+        elif timing == "next":
+            # slide it into position 0 in the track list array so it hits the player next
+            player.queue.put_at(0, track)
+            embed = QueuePopup(track, interaction.user, "playing next (file)!")
+            await interaction.followup.send(view=embed)
+            print(f"[music - play-file] forced file '{attachment.filename}' to play next")
+
+        else: # "queue" (default)
+            # append straight to the end of the line container
+            player.queue.put(track)
+            pos_number = int(len(player.queue))
+            embed = QueuePopup(track, interaction.user, "added file to queue!", pos_number)
+            await interaction.followup.send(view=embed)
+            print(f"[music - play-file] appended file '{attachment.filename}' to back of queue")
 
     except Exception as e:
         print(f"[!] so my speakers broke...: {e}")
@@ -886,6 +966,10 @@ async def restrict_user(interaction: discord.Interaction, target: discord.User):
 @bot.tree.command(name="webhook", description="[blasie-only] create a new webhook :o")
 @app_commands.describe(message="atleast give it a name :P")
 async def create_webhook(interaction: discord.Interaction, message: str = "a webhook - misoyan"):
+    if interaction.user.id != creator_id:
+        await interaction.response.send_message("you're not blasie, get away", ephemeral=True)
+        return
+        
     # check if it's actually ran in a regular text channel
     if isinstance(interaction.channel, discord.TextChannel):
         try:
@@ -981,16 +1065,13 @@ async def loop_cmd(interaction: discord.Interaction, mode: app_commands.Choice[s
         await interaction.response.send_message("there's no active player running in this server!", ephemeral=True)
         return
 
-    # handle the internal wavelink v3 queue boolean routing states
+    # using wavelink.QueueMode enums for loops
     if mode.value == "current":
-        player.queue.loop = True
-        player.queue.loop_all = False
+        player.queue.mode = wavelink.QueueMode.loop
     elif mode.value == "queue":
-        player.queue.loop = False
-        player.queue.loop_all = True
+        player.queue.mode = wavelink.QueueMode.loop_all
     else: # off
-        player.queue.loop = False
-        player.queue.loop_all = False
+        player.queue.mode = wavelink.QueueMode.normal
 
     # build and send the corresponding card layout using layoutview natively
     view_embed = LoopStatusView(mode.value, player.current, interaction.user)
