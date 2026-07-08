@@ -1,6 +1,7 @@
 import asyncio
 import os
 import io
+import re
 import random  # keeps random.choice from crashing her
 import threading  # handles the background web server thread
 import aiohttp # for webhook avatar
@@ -621,6 +622,40 @@ async def play(interaction: discord.Interaction, search: str, timing: str = "que
     finally:
         misoyan_settings["is_connecting"] = False
 
+@bot.tree.command(name="playback", description="pause or unpause the current music playback")
+async def playback(interaction: discord.Interaction):
+    if not misoyan_settings["all_features"]:
+        await interaction.response.send_message("my speakers are off rn (disabled)", ephemeral=True)
+        return
+
+    if interaction.user.id in misoyan_settings["blacklist"]:
+        await interaction.response.send_message("hey, don't touch that.", ephemeral=True)
+        return
+
+    try:
+        node = wavelink.Pool.get_node()
+        player: wavelink.Player = node.get_player(interaction.guild.id)
+
+        if not player or not player.connected:
+            await interaction.response.send_message("i'm not even in a vc right now?", ephemeral=True)
+            return
+
+        # check the pause state and toggle it
+        if not player.paused and player.playing:
+            await player.pause(True)
+            await interaction.response.send_message("oh, ok i'll hold the music.")
+            print(f"[music] playback paused by {interaction.user.name}")
+        elif player.paused:
+            await player.pause(False)
+            await interaction.response.send_message("alr lemme continue playing it")
+            print(f"[music] playback resumed by {interaction.user.name}")
+        else:
+            await interaction.response.send_message("so what, you want me to freeze time?", ephemeral=True)
+
+    except Exception as e:
+        print(f"[!] failed to toggle playback: {e}")
+        await interaction.response.send_message(f"uhh my controls jammed: `{e}`", ephemeral=True)
+
 @bot.tree.command(name="skip", description="skip this track if it's bad bleh")
 async def skip(interaction: discord.Interaction):
     if not misoyan_settings["all_features"]:
@@ -917,6 +952,54 @@ async def systemstatus(interaction: discord.Interaction):
     
     embed.set_footer(text="created by blasie :3")   
     await interaction.response.send_message(embed=embed)
+
+def parse_time(time_str: str) -> int:
+    total_seconds = 0
+    # captures numbers paired with h, m, or s
+    matches = re.findall(r'(\d+)\s*([hmsHMS])', time_str)
+    
+    for value, unit in matches:
+        value = int(value)
+        unit = unit.lower()
+        if unit == 'h':
+            total_seconds += value * 3600
+        elif unit == 'm':
+            total_seconds += value * 60
+        elif unit == 's':
+            total_seconds += value
+            
+    return total_seconds
+
+@bot.tree.command(name="timer", description="set a timer")
+@app_commands.describe(
+    duration="how long for (ex: 1h 30m or 45s)",
+    message="what to remind you of"
+)
+# setting message: str = None natively makes discord label it as [optional]
+async def timer(interaction: discord.Interaction, duration: str, message: str = None):
+    seconds = parse_time(duration)
+    
+    if seconds <= 0:
+        return await interaction.response.send_message("sonion did you not read the format 😭🙏", ephemeral=True)
+    if seconds > 86400:
+        return await interaction.response.send_message("no im not doing this for 24+ hours", ephemeral=True)
+
+    # dynamically adjust the initial confirmation card based on whether a note exists
+    confirm_text = f"ok, your timer's set for **{duration}**!"
+    if message:
+        confirm_text += f"\n~> **note:** {message}"
+
+    await interaction.response.send_message(confirm_text)
+    
+    # countdown in the background thread without stalling the rest of your 1,136 lines
+    await asyncio.sleep(seconds)
+    
+    # build the final reminder ping
+    reminder_text = f"ring ring banana phone ({interaction.user.mention})"
+    if message:
+        reminder_text += f"\n~> **reminder:** {message}"
+        
+    await interaction.followup.send(reminder_text)
 
 @bot.tree.command(name="suicide", description="[blasie-only] completely kills misoyan.")
 async def systemshutdown(interaction: discord.Interaction):
