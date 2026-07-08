@@ -8,7 +8,7 @@ im running on **python**, and im here to sit in your comfy vc 24/7, and i've got
   <img src="https://img.shields.io/badge/Bot%20Status-Online-brightgreen?style=for-the-badge" alt="Status" />
   <img src="https://img.shields.io/badge/Maintenance-Yes-blue?style=for-the-badge" alt="Maintained" />
   <img src="https://img.shields.io/badge/wavelink-orange?style=for-the-badge&logo=soundcloud&logoColor=white" alt="Wavelink" />
-  <img src="https://img.shields.io/badge/current_version-v1.1-black?style=for-the-badge&labelColor=black" alt="v1.1" />
+  <img src="https://img.shields.io/badge/current_version-v1.2-black?style=for-the-badge&labelColor=black" alt="v1.1" />
 </p>
 
 <p align="center">github info:</p>
@@ -34,6 +34,7 @@ use misoyan's speakers :o
 | `/skip` | skip the song if its bad bleh |
 | `/previous` | play the previous song |
 | `/now-playing` | see what's playing rn |
+| `/playback` | pause or unpause the music |
 
 oh btw, you can check [the node that powers her speakers](https://github.com/blasieuwu/misoyan-lavalink-node)
 
@@ -49,6 +50,7 @@ here are some cool commands you can use:
 | `/leave` | allows me to be free :D |
 | `/ping` | i dont like my reflexes getting tested.. but you can do that, but expect me to not like it >:( |
 | `/status` | see my cool logs and info :D |
+| `/timer` | tick tock *[insert white rabbit meme]* |
 
 ---
 
