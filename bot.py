@@ -48,7 +48,7 @@ misoyan_settings = {
     "vc_leaving": True,             # yeah i can hold the vc for a bit
     "status_changes": True,         # maybe i wont make a note rn...
     "status_change_delay": False,   # "wait i should do this... NO WAIT THIS IS-"
-    "fih_replies": True,            # fih :3
+    "fih_replies": False,            # fih :3 (changed to false cuz shes annoying)
     "need_reconnection": False,     # "i dont need to connect rn, im alr connected :sob:"
     "is_connecting": False,         # "yo im alr connecting"
     "blacklist": set()              # "i hate you, dont talk to me >:("
@@ -406,7 +406,7 @@ class NowPlayingView(ui.LayoutView):
         elif hasattr(track, 'artwork') and track.artwork:
             track_cover_url = track.artwork
         else:
-            track_cover_url = "https://cdn.discordapp.com/attachments/1454299112181600299/1520232653503201331/-sIJRmHN.jpg?ex=6a40727d&is=6a3f20fd&hm=56a9548e90f38e4f26adc02dfddd5d28542fd0a928eb8578ecc564aac0976882&"
+            track_cover_url = "./whoops-it-failed.png"
 
         if track.length:
             minutes = int((track.length // 1000) // 60)
@@ -495,7 +495,7 @@ class QueuePopup(ui.LayoutView):
         if hasattr(track, 'artwork') and track.artwork:
             track_cover_url = track.artwork
         else:
-            track_cover_url = "https://cdn.discordapp.com/attachments/1454299112181600299/1520232653503201331/-sIJRmHN.jpg?ex=6a40727d&is=6a3f20fd&hm=56a9548e90f38e4f26adc02dfddd5d28542fd0a928eb8578ecc564aac0976882&" # a cool sky picture placeholder
+            track_cover_url = "./whoops-it-failed.png"
 
         # 2. get the track length
         if track.length:
@@ -746,7 +746,7 @@ class SongQueue(ui.LayoutView):
             if hasattr(current_track, 'artwork') and current_track.artwork:
                 current_cover = current_track.artwork
             else:
-                current_cover = "https://cdn.discordapp.com/attachments/1454299112181600299/1520232653503201331/-sIJRmHN.jpg?ex=6a40727d&is=6a3f20fd&hm=56a9548e90f38e4f26adc02dfddd5d28542fd0a928eb8578ecc564aac0976882&"
+                current_cover = "./whoops-it-failed.png"
 
             # handle current track duration calculation
             if current_track.length:
@@ -1074,7 +1074,7 @@ async def create_webhook(interaction: discord.Interaction, message: str = "a web
     # check if it's actually ran in a regular text channel
     if isinstance(interaction.channel, discord.TextChannel):
         try:
-            webhook_avatar_url = "https://cdn.discordapp.com/attachments/1454299112181600299/1520232653503201331/-sIJRmHN.jpg?ex=6a40727d&is=6a3f20fd&hm=56a9548e90f38e4f26adc02dfddd5d28542fd0a928eb8578ecc564aac0976882&"
+            webhook_avatar_url = "./whoops-it-failed.png"
             avatar_image = None
             
             # get the image
@@ -1136,7 +1136,7 @@ class LoopStatusView(ui.LayoutView):
                 thumbnail_url = track.artwork
             else:
                 # fallback picture placeholder if the track lacks artwork
-                thumbnail_url = "https://cdn.discordapp.com/attachments/1454299112181600299/1520232653503201331/-sIJRmHN.jpg?ex=6a40727d&is=6a3f20fd&hm=56a9548e90f38e4f26adc02dfddd5d28542fd0a928eb8578ecc564aac0976882&"
+                thumbnail_url = "./whoops-it-failed.png"
             
             card_text = f"-# requested by {user_handle}\n### loop: current song\nthe current song will now loop forever :3"
             accent = discord.Color.from_str("#5C9F05") # matching your active playing aesthetic
