@@ -133,7 +133,8 @@ ytdl = yt_dlp.YoutubeDL({
     'noplaylist': True,
     'quiet': True,
     'default_search': 'ytsearch',
-    'source_address': '0.0.0.0'
+    'source_address': '0.0.0.0',
+    'cookiefile': '/etc/secrets/cookies.txt'
 })
 
 def play_next_audio(vc, guild_id):
