@@ -127,14 +127,14 @@ FFMPEG_OPTIONS = {
     'options': '-vn'
 }
 
-# yt-dlp extractor options profile
 ytdl = yt_dlp.YoutubeDL({
-    'format': 'bestaudio/best/highest',
+    'format': 'bestaudio/best',
     'noplaylist': True,
     'quiet': True,
     'default_search': 'ytsearch',
     'source_address': '0.0.0.0',
-    'cookiefile': '/etc/secrets/cookies.txt'
+    'cookiefile': '/etc/secrets/cookies.txt',
+    'js_runtimes': ['node']  # ⚡ forces yt-dlp to use render's native node engine to execute the ejs scripts
 })
 
 def play_next_audio(vc, guild_id):
