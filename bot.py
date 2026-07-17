@@ -29,6 +29,8 @@ bot = commands.Bot(
     ws_close_timeout=10.0      # cleans up dead sockets fast so she can immediately re-handshake
 )
 
+afk_users = {} # for the /afk command
+
 # global settings
 target_voice_channel_id = 123456789012345678  # default home channel
 bot_token = os.environ.get("DISCORD_BOT_TOKEN")
@@ -162,7 +164,7 @@ def play_next_audio(vc, guild_id):
         return
 
     try:
-        source = discord.FFmpegPCMAudio(track.uri, executable="./bin/ffmpeg", **FFMPEG_OPTIONS)
+        source = discord.FFmpegPCMAudio(track.uri, **FFMPEG_OPTIONS)
         vc.play(source, after=lambda e: bot.loop.call_soon_threadsafe(play_next_audio, vc, guild_id))
         print(f"[queue] automatically transitioning to: {track.title}")
     except Exception as e:
@@ -342,10 +344,20 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
 async def on_message(message: discord.Message):
     if message.author.bot:
         return
+    
+    # --- afk section | start ---
+    if message.author.id in afk_users:
+        reason = afk_users.pop(message.author.id)
+        await message.channel.send(f"welcome back, {message.author.mention}. you're no longer afk.")
+    
+    for mentioned_user in message.mentions:
+        if mentioned_user.id in afk_users:
+            reason = afk_users[mentioned_user.id]
+            await message.channel.send(f"hey, {mentioned_user.name}'s afk.\n~> reason: '*{reason}'*")
+    # --- afk section | end ---
 
     if not misoyan_settings["all_features"] or message.author.id in misoyan_settings["blacklist"]:
         return
-        
     if not misoyan_settings["fih_replies"]:
         return
 
@@ -357,6 +369,12 @@ async def on_message(message: discord.Message):
             print(f"my chat broke: {e}")
 
 # slash commands
+@bot.tree.command(name="afk", description="tell people you're busy")
+@app_commands.describe(reason="why you're away")
+async def afk(interaction: discord.Interaction, reason: str = "busy :3"):
+    afk_users[interaction.user.id] = reason
+    await interaction.response.send_message(f"ok, you're afk with reason: '*{reason}*'", ephemeral=True)
+
 @bot.tree.command(name="ping", description="check misoyan's reflexes")
 async def ping(interaction: discord.Interaction):
     latency = round(bot.latency * 1000)
@@ -582,7 +600,7 @@ async def play(interaction: discord.Interaction, search: str, timing: str = "que
         
         if not vc.is_playing() and not vc.is_paused():
             player.current = track
-            source = discord.FFmpegPCMAudio(track.uri, executable="./bin/ffmpeg", **FFMPEG_OPTIONS)
+            source = discord.FFmpegPCMAudio(track.uri, **FFMPEG_OPTIONS)
             vc.play(source, after=lambda e: bot.loop.call_soon_threadsafe(play_next_audio, vc, interaction.guild.id))
             
             embed = NowPlayingView(track, interaction.user) 
@@ -676,7 +694,7 @@ async def previous_track(interaction: discord.Interaction):
     player.current = real_previous
     vc.stop()
     
-    source = discord.FFmpegPCMAudio(track.uri, executable="./bin/ffmpeg", **FFMPEG_OPTIONS)
+    source = discord.FFmpegPCMAudio(track.uri, **FFMPEG_OPTIONS)
     vc.play(source, after=lambda e: bot.loop.call_soon_threadsafe(play_next_audio, vc, interaction.guild.id))
     await interaction.response.send_message(f"rewinding back to: **{real_previous.title}**")
 
@@ -692,7 +710,7 @@ async def replay_track(interaction: discord.Interaction):
     track = player.current
     vc.stop()
     
-    source = discord.FFmpegPCMAudio(track.uri, executable="./bin/ffmpeg", **FFMPEG_OPTIONS)
+    source = discord.FFmpegPCMAudio(track.uri, **FFMPEG_OPTIONS)
     vc.play(source, after=lambda e: bot.loop.call_soon_threadsafe(play_next_audio, vc, interaction.guild.id))
     await interaction.response.send_message(f"replaying **{track.title}**")
 
@@ -819,7 +837,7 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
 
         if not vc.is_playing() and not vc.is_paused():
             player.current = track
-            source = discord.FFmpegPCMAudio(track.uri, executable="./bin/ffmpeg", **FFMPEG_OPTIONS)
+            source = discord.FFmpegPCMAudio(track.uri, **FFMPEG_OPTIONS)
             vc.play(source, after=lambda e: bot.loop.call_soon_threadsafe(play_next_audio, vc, interaction.guild.id))
             
             view_embed = FilePlayingView(track, interaction.user, attachment, guild=interaction.guild, has_cover=has_extracted_cover) 
