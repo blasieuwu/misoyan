@@ -9,7 +9,7 @@ from http.server import SimpleHTTPRequestHandler, HTTPServer  # basic server cla
 import discord
 from discord import app_commands, ui
 from discord.ext import commands, tasks
-import yt_dlp  # 🛠️ no more lavalink nodes!
+import wavelink  # ⚡ back on lavalink nodes!
 from mutagen.mp3 import MP3 # for the file cover art embedding
 from mutagen.id3 import ID3
 
@@ -53,29 +53,29 @@ misoyan_settings = {
 # asyncio lock to prevent the loop and events from connecting at the same time
 vc_connection_lock = asyncio.Lock()
 
-# custom class to manage queue state without wavelink
-class MisoyanPlayer:
-    def __init__(self):
-        self.queue = []
-        self.history = []
-        self.current = None
-        self.loop_mode = "off"  # "off", "current", "queue"
+# helper to load environment variables
+LAVALINK_HOST = os.environ.get("LAVALINK_HOST", "127.0.0.1")
+LAVALINK_PORT = int(os.environ.get("LAVALINK_PORT", 2333))
+LAVALINK_PASS = os.environ.get("LAVALINK_PASS", "youshallnotpass")
+LAVALINK_SECURE = os.environ.get("LAVALINK_SECURE", "False").lower() in ("true", "1", "yes")
 
-class Track:
-    def __init__(self, title, author, length, uri, artwork=None):
-        self.title = title
-        self.author = author
-        self.length = length  # in milliseconds
-        self.uri = uri
-        self.artwork = artwork
-
-# active guild players store
-guild_players = {}
-
-def get_player(guild_id) -> MisoyanPlayer:
-    if guild_id not in guild_players:
-        guild_players[guild_id] = MisoyanPlayer()
-    return guild_players[guild_id]
+async def connect_nodes():
+    """sets up the connection with our external lavalink server node"""
+    await bot.wait_until_ready()
+    
+    protocol = "https" if LAVALINK_SECURE else "http"
+    uri = f"{protocol}://{LAVALINK_HOST}:{LAVALINK_PORT}"
+    
+    node = wavelink.Node(
+        uri=uri,
+        password=LAVALINK_PASS,
+    )
+    
+    try:
+        await wavelink.Pool.connect(nodes=[node], client=bot)
+        print("[lavalink] successfully built a connection with our node pool!")
+    except Exception as e:
+        print(f"[lavalink] fail to build node pipeline: {e}")
 
 # clanker has emotions | format: (status, discord note)
 status_pool = [
@@ -122,58 +122,6 @@ reply_list = [
 ]
 
 os.makedirs("cache", exist_ok=True)
-
-# ffmpeg options for smooth audio playback pipelines
-FFMPEG_OPTIONS = {
-    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-    'options': '-vn'
-}
-
-ytdl = yt_dlp.YoutubeDL({
-    'format': 'bestaudio/best',
-    'noplaylist': True,
-    'quiet': True,
-    'default_search': 'ytsearch',
-    'source_address': '0.0.0.0',
-    'cookiefile': '/etc/secrets/cookies.txt',
-    'js_runtimes': {'node': {}},
-    'extractor_args': {
-        'youtubepot-bgutilhttp': {
-            'base_url': 'https://pof-token-generator.onrender.com'
-        }
-    }
-})
-
-def play_next_audio(vc, guild_id):
-    """handles song transition workflows and queue loops natively without wavelink"""
-    player = get_player(guild_id)
-    if vc is None or not vc.is_connected():
-        return
-
-    # handle looping tracks logic context
-    if player.loop_mode == "current" and player.current:
-        track = player.current
-    elif player.queue:
-        if player.loop_mode == "queue" and player.current:
-            player.queue.append(player.current)
-        
-        track = player.queue.pop(0)
-        if player.current:
-            player.history.append(player.current)
-        player.current = track
-    else:
-        if player.current:
-            player.history.append(player.current)
-        player.current = None
-        print("[queue] queue is now empty, going silent.")
-        return
-
-    try:
-        source = discord.FFmpegPCMAudio(track.uri, **FFMPEG_OPTIONS)
-        vc.play(source, after=lambda e: bot.loop.call_soon_threadsafe(play_next_audio, vc, guild_id))
-        print(f"[queue] automatically transitioning to: {track.title}")
-    except Exception as e:
-        print(f"[!] auto-transition failed: {e}")
 
 class FullSystemControlPanel(discord.ui.View):
     def __init__(self):
@@ -269,8 +217,8 @@ async def native_voice_sentinel_loop():
     if not home_channel or not isinstance(home_channel, discord.VoiceChannel):
         return
 
-    vc = home_channel.guild.voice_client
-    is_disconnected = not vc or not vc.is_connected()
+    vc: wavelink.Player = home_channel.guild.voice_client
+    is_disconnected = not vc or not vc.connected
 
     if is_disconnected or misoyan_settings["need_reconnection"]:
         async with vc_connection_lock:
@@ -285,7 +233,7 @@ async def native_voice_sentinel_loop():
                     except Exception:
                         pass
 
-                await home_channel.connect()
+                await home_channel.connect(cls=wavelink.Player)
                 print("im back :3")
                 misoyan_settings["need_reconnection"] = False
                 
@@ -319,6 +267,9 @@ async def cycle_status_loop():
 async def on_ready():
     print(f"ah, time to go on discord | {bot.user.name}")
     
+    # establish connection to our lavalink nodes
+    bot.loop.create_task(connect_nodes())
+    
     try:
         synced = await bot.tree.sync()
         print(f"i got {len(synced)} commands ready :o")
@@ -332,6 +283,25 @@ async def on_ready():
     if not native_voice_sentinel_loop.is_running():
         native_voice_sentinel_loop.start()
         print("time to set up my speakers for music")
+
+@bot.event
+async def on_wavelink_node_ready(payload: wavelink.NodeReadyEventPayload):
+    print(f"[lavalink] node '{payload.session_id}' connected successfully and is ready to stream!")
+
+@bot.event
+async def on_wavelink_track_end(payload: wavelink.TrackEndEventPayload):
+    """handles song transition workflows and queue loops natively via wavelink state machine"""
+    player: wavelink.Player = payload.player
+    if not player:
+        return
+        
+    # handoff current track to next queue item automatically
+    if not player.queue.is_empty:
+        next_track = player.queue.get()
+        await player.play(next_track)
+        print(f"[queue] automatically transitioning to: {next_track.title}")
+    else:
+        print("[queue] queue is now empty, going silent.")
 
 @bot.event
 async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
@@ -408,7 +378,7 @@ async def join(interaction: discord.Interaction):
         try:
             misoyan_settings["is_connecting"] = True
             print(f"connecting to vc: {user_channel.name}")
-            await user_channel.connect()
+            await user_channel.connect(cls=wavelink.Player)
             misoyan_settings["need_reconnection"] = False
             await interaction.followup.send("im in your vc now :D")
         except Exception as e:
@@ -423,8 +393,8 @@ async def leave(interaction: discord.Interaction):
         await interaction.response.send_message("you are not making me leave lmaooo (disabled)", ephemeral=True)
         return
     
-    vc = interaction.guild.voice_client
-    if vc and vc.is_connected():
+    vc: wavelink.Player = interaction.guild.voice_client
+    if vc and vc.connected:
         async with vc_connection_lock:
             misoyan_settings["need_reconnection"] = False
             await vc.disconnect()
@@ -433,7 +403,7 @@ async def leave(interaction: discord.Interaction):
         await interaction.response.send_message("you want me to leave...? im not connected to a vc", ephemeral=True)
 
 class NowPlayingView(ui.LayoutView):
-    def __init__(self, track, user, extra: str = "", override_cover: str = None):
+    def __init__(self, track: wavelink.Playable, user, extra: str = "", override_cover: str = None):
         super().__init__()
 
         user_handle = f"@{user.name}"
@@ -443,7 +413,7 @@ class NowPlayingView(ui.LayoutView):
         elif hasattr(track, 'artwork') and track.artwork:
             track_cover_url = track.artwork
         else:
-            track_cover_url = "./whoops-it-failed.png"
+            track_cover_url = "https://placehold.co/240x240/eaeaea/969696.png?text=No+Cover"
 
         if track.length:
             minutes = int((track.length // 1000) // 60)
@@ -472,7 +442,7 @@ class NowPlayingView(ui.LayoutView):
         self.add_item(container)
 
 class FilePlayingView(ui.LayoutView):
-    def __init__(self, track, user: discord.User, attachment: discord.Attachment, guild: discord.Guild = None, has_cover: bool = False):
+    def __init__(self, track: wavelink.Playable, user: discord.User, attachment: discord.Attachment, guild: discord.Guild = None, has_cover: bool = False):
         super().__init__()
 
         user_handle = f"@{user.name}"
@@ -520,7 +490,7 @@ class FilePlayingView(ui.LayoutView):
         self.add_item(container)
 
 class QueuePopup(ui.LayoutView):
-    def __init__(self, track, user, queue_message, position: int = None):
+    def __init__(self, track: wavelink.Playable, user, queue_message, position: int = None):
         super().__init__()
 
         user_handle = f"@{user.name}"
@@ -528,7 +498,7 @@ class QueuePopup(ui.LayoutView):
         if hasattr(track, 'artwork') and track.artwork:
             track_cover_url = track.artwork
         else:
-            track_cover_url = "./whoops-it-failed.png"
+            track_cover_url = "https://placehold.co/240x240/eaeaea/969696.png?text=No+Cover"
 
         if track.length:
             minutes = int((track.length // 1000) // 60)
@@ -575,57 +545,46 @@ async def play(interaction: discord.Interaction, search: str, timing: str = "que
     await interaction.response.defer()
 
     try:
-        vc = interaction.guild.voice_client
-        if not vc or not vc.is_connected():
+        vc: wavelink.Player = interaction.guild.voice_client
+        if not vc or not vc.connected:
             async with vc_connection_lock:
                 misoyan_settings["is_connecting"] = True
                 print(f"[/play] connecting to vc: {user_channel.name}")
-                vc = await user_channel.connect()
+                vc = await user_channel.connect(cls=wavelink.Player)
                 global target_voice_channel_id
                 target_voice_channel_id = user_channel.id
                 misoyan_settings["need_reconnection"] = False
                 await asyncio.sleep(1.5)
 
-        player = get_player(interaction.guild.id)
-        
         print(f"wait, im searching for '{search}' rn gimme a sec")
-        loop = asyncio.get_event_loop()
-        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(search, download=False))
+        tracks = await wavelink.Playable.search(search)
         
-        if 'entries' in data:
-            data = data['entries'][0]
+        if not tracks:
+            await interaction.followup.send("i couldn't find anything with that search query :c", ephemeral=True)
+            return
 
-        track_url = data['url']
-        track_title = data.get('title', 'Unknown Title')
-        track_author = data.get('uploader', 'Unknown Artist')
-        track_len = int(data.get('duration', 0) * 1000)
-        track_art = data.get('thumbnail', None)
-
-        track = Track(track_title, track_author, track_len, track_url, track_art)
+        track: wavelink.Playable = tracks[0]
         
-        if not vc.is_playing() and not vc.is_paused():
-            player.current = track
-            source = discord.FFmpegPCMAudio(track.uri, **FFMPEG_OPTIONS)
-            vc.play(source, after=lambda e: bot.loop.call_soon_threadsafe(play_next_audio, vc, interaction.guild.id))
-            
+        if not vc.playing and not vc.paused:
+            await vc.play(track)
             embed = NowPlayingView(track, interaction.user) 
             await interaction.followup.send(view=embed)
             return
 
         if timing == "replace":
-            player.queue.insert(0, track)
-            vc.stop()
+            vc.queue.put_at_front(track)
+            await vc.skip()
             embed = NowPlayingView(track, interaction.user, " (replaced)")
             await interaction.followup.send(view=embed)
 
         elif timing == "next":
-            player.queue.insert(0, track)
+            vc.queue.put_at_front(track)
             embed = QueuePopup(track, interaction.user, "playing next!")
             await interaction.followup.send(view=embed)
 
         else:
-            player.queue.append(track)
-            embed = QueuePopup(track, interaction.user, "added to queue!", len(player.queue))
+            vc.queue.put(track)
+            embed = QueuePopup(track, interaction.user, "added to queue!", len(vc.queue))
             await interaction.followup.send(view=embed)
 
     except Exception as e:
@@ -644,16 +603,16 @@ async def playback(interaction: discord.Interaction):
         await interaction.response.send_message("hey, don't touch that.", ephemeral=True)
         return
 
-    vc = interaction.guild.voice_client
-    if not vc or not vc.is_connected():
+    vc: wavelink.Player = interaction.guild.voice_client
+    if not vc or not vc.connected:
         await interaction.response.send_message("i'm not even in a vc right now?", ephemeral=True)
         return
 
-    if vc.is_playing():
-        vc.pause()
+    if vc.playing and not vc.paused:
+        await vc.pause(True)
         await interaction.response.send_message("oh, ok i'll hold the music.")
-    elif vc.is_paused():
-        vc.resume()
+    elif vc.paused:
+        await vc.pause(False)
         await interaction.response.send_message("alr lemme continue playing it")
     else:
         await interaction.response.send_message("so what, you want me to freeze time?", ephemeral=True)
@@ -668,66 +627,57 @@ async def skip(interaction: discord.Interaction):
         await interaction.response.send_message("hey, don't touch that.", ephemeral=True)
         return
 
-    vc = interaction.guild.voice_client
-    if not vc or not vc.is_connected():
+    vc: wavelink.Player = interaction.guild.voice_client
+    if not vc or not vc.connected:
         await interaction.response.send_message("i'm not even in a vc to skip anything?", ephemeral=True)
         return
 
-    if not vc.is_playing() and not vc.is_paused():
+    if not vc.playing and not vc.paused:
         await interaction.response.send_message("there's nothing playing right now anyway!", ephemeral=True)
         return
 
-    vc.stop()
+    await vc.skip()
     await interaction.response.send_message("track skipped! next track coming up...")
 
 @bot.tree.command(name="previous", description="play the previous song if you like it :3")
 async def previous_track(interaction: discord.Interaction):
-    vc = interaction.guild.voice_client
-    if not vc or not vc.is_connected():
+    vc: wavelink.Player = interaction.guild.voice_client
+    if not vc or not vc.connected:
         await interaction.response.send_message("i'm not in a vc!", ephemeral=True)
         return
 
-    player = get_player(interaction.guild.id)
-    if not player.history:
+    if not vc.queue.history:
         await interaction.response.send_message("hmph, you think i can play nothing?", ephemeral=True)
         return
 
-    real_previous = player.history.pop()
-    if player.current:
-        player.queue.insert(0, player.current)
+    real_previous = vc.queue.history.pop()
+    if vc.current:
+        vc.queue.put_at_front(vc.current)
         
-    player.current = real_previous
-    vc.stop()
-    
-    source = discord.FFmpegPCMAudio(track.uri, **FFMPEG_OPTIONS)
-    vc.play(source, after=lambda e: bot.loop.call_soon_threadsafe(play_next_audio, vc, interaction.guild.id))
+    await vc.play(real_previous)
     await interaction.response.send_message(f"rewinding back to: **{real_previous.title}**")
 
 @bot.tree.command(name="replay", description="restart the current song from the beginning")
 async def replay_track(interaction: discord.Interaction):
-    vc = interaction.guild.voice_client
-    player = get_player(interaction.guild.id)
+    vc: wavelink.Player = interaction.guild.voice_client
     
-    if not vc or not vc.is_connected() or not player.current:
+    if not vc or not vc.connected or not vc.current:
         await interaction.response.send_message("tsk, seriously?")
         return
 
-    track = player.current
-    vc.stop()
-    
-    source = discord.FFmpegPCMAudio(track.uri, **FFMPEG_OPTIONS)
-    vc.play(source, after=lambda e: bot.loop.call_soon_threadsafe(play_next_audio, vc, interaction.guild.id))
+    track = vc.current
+    await vc.seek(0)
     await interaction.response.send_message(f"replaying **{track.title}**")
 
 class SongQueue(ui.LayoutView):
-    def __init__(self, player, user):
+    def __init__(self, vc: wavelink.Player, user):
         super().__init__()
 
         queue_sections = []
 
-        if player.current:
-            current_track = player.current
-            current_cover = current_track.artwork if current_track.artwork else "./whoops-it-failed.png"
+        if vc.current:
+            current_track = vc.current
+            current_cover = current_track.artwork if current_track.artwork else "https://placehold.co/240x240/eaeaea/969696.png?text=No+Cover"
 
             if current_track.length:
                 curr_min = int((current_track.length // 1000) // 60)
@@ -742,7 +692,7 @@ class SongQueue(ui.LayoutView):
                 ui.Section(ui.TextDisplay(current_text), accessory=ui.Thumbnail(current_cover))
             )
 
-        for i, track in enumerate(player.queue):
+        for i, track in enumerate(vc.queue):
             if i >= 4:
                 break
                 
@@ -767,13 +717,13 @@ class SongQueue(ui.LayoutView):
 
 @bot.tree.command(name="queue", description="see what songs are lined up next")
 async def view_queue(interaction: discord.Interaction):
-    player = get_player(interaction.guild.id)
+    vc: wavelink.Player = interaction.guild.voice_client
 
-    if not player.current and len(player.queue) == 0:
+    if not vc or not vc.connected or (not vc.current and len(vc.queue) == 0):
         await interaction.response.send_message("the queue is completely empty!", ephemeral=True)
         return
 
-    view_embed = SongQueue(player, interaction.user)
+    view_embed = SongQueue(vc, interaction.user)
     await interaction.response.send_message(view=view_embed)
 
 @bot.tree.command(name="play-file", description="give me your audio file :)")
@@ -808,17 +758,15 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
     await interaction.response.defer()
 
     try:
-        vc = interaction.guild.voice_client
-        if not vc or not vc.is_connected():
+        vc: wavelink.Player = interaction.guild.voice_client
+        if not vc or not vc.connected:
             misoyan_settings["is_connecting"] = True
             print(f"[play-file] connecting to vc: {user_channel.name}")
-            vc = await user_channel.connect()
+            vc = await user_channel.connect(cls=wavelink.Player)
             global target_voice_channel_id
             target_voice_channel_id = user_channel.id
             misoyan_settings["need_reconnection"] = False
             await asyncio.sleep(1.5)
-
-        player = get_player(interaction.guild.id)
 
         # --- metadata extraction block ---
         has_extracted_cover = False
@@ -838,31 +786,34 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
             except Exception as metadata_error:
                 print(f"[!] couldn't rip metadata tags from track: {metadata_error}")
 
-        track = Track(attachment.filename, "local asset", 0, attachment.url)
-
-        if not vc.is_playing() and not vc.is_paused():
-            player.current = track
-            source = discord.FFmpegPCMAudio(track.uri, **FFMPEG_OPTIONS)
-            vc.play(source, after=lambda e: bot.loop.call_soon_threadsafe(play_next_audio, vc, interaction.guild.id))
+        # load local track through search
+        tracks = await wavelink.Playable.search(attachment.url)
+        if not tracks:
+            await interaction.followup.send("i failed to decode your file stream natively :c", ephemeral=True)
+            return
             
+        track = tracks[0]
+
+        if not vc.playing and not vc.paused:
+            await vc.play(track)
             view_embed = FilePlayingView(track, interaction.user, attachment, guild=interaction.guild, has_cover=has_extracted_cover) 
             await interaction.followup.send(view=view_embed)
             return
 
         if timing == "replace":
-            player.queue.insert(0, track)
-            vc.stop()
+            vc.queue.put_at_front(track)
+            await vc.skip()
             view_embed = FilePlayingView(track, interaction.user, attachment, guild=interaction.guild, has_cover=has_extracted_cover)
             await interaction.followup.send(view=view_embed)
 
         elif timing == "next":
-            player.queue.insert(0, track)
+            vc.queue.put_at_front(track)
             embed = QueuePopup(track, interaction.user, "playing next (file)!")
             await interaction.followup.send(view=embed)
 
         else:
-            player.queue.append(track)
-            embed = QueuePopup(track, interaction.user, "added file to queue!", len(player.queue))
+            vc.queue.put(track)
+            embed = QueuePopup(track, interaction.user, "added file to queue!", len(vc.queue))
             await interaction.followup.send(view=embed)
 
     except Exception as e:
@@ -876,8 +827,8 @@ async def systemstatus(interaction: discord.Interaction):
     total_guilds = len(bot.guilds)
     latency = round(bot.latency * 1000)
     
-    vc = interaction.guild.voice_client
-    current_vc_connections = 1 if vc and vc.is_connected() else 0
+    vc: wavelink.Player = interaction.guild.voice_client
+    current_vc_connections = 1 if vc and vc.connected else 0
     bot_thumbnail = bot.user.display_avatar.url
     
     embed = discord.Embed(
@@ -982,131 +933,41 @@ async def restrict_user(interaction: discord.Interaction, target: discord.User):
     is_admin = interaction.guild and interaction.user.guild_permissions.administrator
 
     if not (is_creator or is_server_owner or is_admin):
-        await interaction.response.send_message("shoo, before you get blacklisted", ephemeral=True)
+        await interaction.response.send_message("you're not blasie or an admin here, get away", ephemeral=True)
         return
         
     if target.id == creator_id:
-        await interaction.response.send_message("hmph, very funny. can't do that tho.", ephemeral=True)
+        await interaction.response.send_message("you can't lock up my creator, dummy!!", ephemeral=True)
         return
-        
+
     if target.id in misoyan_settings["blacklist"]:
         misoyan_settings["blacklist"].remove(target.id)
-        await interaction.response.send_message(f"unblacklisted. **{target.name}** can now talk to misoyan again.", ephemeral=True)
+        await interaction.response.send_message(f"yay! {target.mention} is now allowed to speak to me again :3")
     else:
         misoyan_settings["blacklist"].add(target.id)
-        await interaction.response.send_message(f"blacklisted. **{target.name}** has been blocked by misoyan.", ephemeral=True)
+        await interaction.response.send_message(f"get lost! {target.mention} has been blacklisted.")
 
-@bot.tree.command(name="webhook", description="[blasie-only] create a new webhook :o")
-@app_commands.describe(message="atleast give it a name :P")
-async def create_webhook(interaction: discord.Interaction, message: str = "a webhook - misoyan"):
-    if interaction.user.id != creator_id:
-        await interaction.response.send_message("you're not blasie, get away", ephemeral=True)
-        return
-        
-    if isinstance(interaction.channel, discord.TextChannel):
-        try:
-            webhook_avatar_url = "./whoops-it-failed.png"
-            avatar_image = None
-            
-            async with aiohttp.ClientSession() as session:
-                async with session.get(webhook_avatar_url) as response:
-                    if response.status == 200:
-                        avatar_image = await response.read()
+# --- keepalive web server section ---
+class KeepAliveHandler(SimpleHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"fih fih fih :3")
 
-            webhook = await interaction.channel.create_webhook(
-                name = message,
-                reason = "created by blasie using misoyan :o",
-                avatar = avatar_image
-            )
-
-            await interaction.response.send_message(f"done! your webhook url is: ||{webhook.url}|| | name: {webhook.name}", ephemeral = True)
-
-        except discord.Forbidden:
-            await interaction.response.send_message("i don't have the 'manage webhooks' permission :p", ephemeral = True)
-        except discord.HTTPException:
-            await interaction.response.send_message("so it may have failed... ehe :)", ephemeral = True)
-    else:
-        await interaction.response.send_message("hmph, you can't do that (text channels only)", ephemeral = True)
-
-@bot.tree.command(name="now-playing", description="view the current song :p")
-async def now_playing(interaction: discord.Interaction):
-    player = get_player(interaction.guild.id)
-    
-    if not player.current:
-        await interaction.response.send_message("you seriously wanna see the void? nothing's playing...")
-        return
-
-    current_track = player.current
-    cover_url_override = None
-
-    local_image_file = f"cache/{interaction.guild.id}_cover.png"
-    if current_track.uri and "discordapp.com/attachments/" in current_track.uri and os.path.exists(local_image_file):
-        render_url = os.environ.get("RENDER_EXTERNAL_URL")
-        if render_url:
-            render_url = render_url.rstrip("/")
-            cover_url_override = f"{render_url}/{local_image_file}"
-
-    embed = NowPlayingView(current_track, interaction.user, override_cover=cover_url_override)
-    await interaction.response.send_message(view=embed)
-    
-class LoopStatusView(ui.LayoutView):
-    def __init__(self, mode: str, track, user: discord.User):
-        super().__init__()
-        
-        user_handle = f"@{user.name}"
-        
-        if mode == "current":
-            if track and hasattr(track, 'artwork') and track.artwork:
-                thumbnail_url = track.artwork
-            else:
-                thumbnail_url = "./whoops-it-failed.png"
-            
-            card_text = f"-# requested by {user_handle}\n### loop: current song\nthe current song will now loop forever :3"
-            accent = discord.Color.from_str("#5C9F05")
-            
-        elif mode == "queue":
-            thumbnail_url = user.display_avatar.url
-            card_text = f"-# requested by {user_handle}\n### loop: queue\nthe entire queue will now loop :o"
-            accent = discord.Color.from_str("#85C2F0")
-            
-        else: # off
-            thumbnail_url = user.display_avatar.url
-            card_text = f"-# requested by {user_handle}\n### loop: off\nloop has been turned off :P"
-            accent = discord.Color.from_str("#FF0000")
-
-        container = ui.Container(
-            ui.Section(ui.TextDisplay(card_text), accessory=ui.Thumbnail(thumbnail_url)),
-            accent_color=accent
-        )
-        self.add_item(container)
-
-@bot.tree.command(name="loop", description="change the loop mode for the player")
-@app_commands.choices(mode=[
-    app_commands.Choice(name="current song", value="current"),
-    app_commands.Choice(name="queue", value="queue"),
-    app_commands.Choice(name="off", value="off")
-])
-async def loop_cmd(interaction: discord.Interaction, mode: app_commands.Choice[str]):
-    player = get_player(interaction.guild.id)
-    player.loop_mode = mode.value
-
-    view_embed = LoopStatusView(mode.value, player.current, interaction.user)
-    await interaction.response.send_message(view=view_embed)
-
-def run_dummy_server(port):
-    try:
-        server_address = ('0.0.0.0', int(port))
-        httpd = HTTPServer(server_address, SimpleHTTPRequestHandler)
-        print(f"ok i managed to do it :D | port: {port}")
-        httpd.serve_forever()
-    except Exception as e:
-        print(f"so i kinda failed to start the web server...: {e}")
+def run_web_server():
+    port = int(render_port) if render_port else 8080
+    server = HTTPServer(("0.0.0.0", port), KeepAliveHandler)
+    print(f"hosting my little keepalive heart on port {port} :o")
+    server.serve_forever()
 
 if __name__ == "__main__":
-    if render_port:
-        threading.Thread(target=run_dummy_server, args=(render_port,), daemon=True).start()
-
+    # start the background keepalive web server thread
+    web_thread = threading.Thread(target=run_web_server, daemon=True)
+    web_thread.start()
+    
+    # fire up our discord bot
     if bot_token:
         bot.run(bot_token)
     else:
-        print("you forgot my token you dummy!")
+        print("where is my token??")
