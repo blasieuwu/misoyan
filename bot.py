@@ -13,6 +13,10 @@ import yt_dlp  # 🛠️ no more lavalink nodes!
 from mutagen.mp3 import MP3 # for the file cover art embedding
 from mutagen.id3 import ID3
 
+# inject deno into the system environment path so yt-dlp sees it instantly
+if os.path.exists("/opt/render/.deno/bin"):
+    os.environ["PATH"] = f"/opt/render/.deno/bin:{os.environ['PATH']}"
+
 # make bot can read the word "misoyan"
 intents = discord.Intents.default()
 intents.message_content = True 
