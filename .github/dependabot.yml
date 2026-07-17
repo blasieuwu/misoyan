@@ -1,0 +1,7 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "daily" # ⚡ daily checks ensure you get yt-dlp emergency updates immediately
+    open-pull-requests-limit: 5
