@@ -4,3 +4,4 @@ davey
 wavelink
 yt-dlp
 mutagen
+quickjs
