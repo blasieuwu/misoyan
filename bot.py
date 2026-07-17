@@ -161,7 +161,7 @@ def play_next_audio(vc, guild_id):
         return
 
     try:
-        source = discord.FFmpegPCMAudio(track.uri, **FFMPEG_OPTIONS)
+        source = discord.FFmpegPCMAudio(track.uri, executable="./bin/ffmpeg", **FFMPEG_OPTIONS)
         vc.play(source, after=lambda e: bot.loop.call_soon_threadsafe(play_next_audio, vc, guild_id))
         print(f"[queue] automatically transitioning to: {track.title}")
     except Exception as e:
@@ -581,7 +581,7 @@ async def play(interaction: discord.Interaction, search: str, timing: str = "que
         
         if not vc.is_playing() and not vc.is_paused():
             player.current = track
-            source = discord.FFmpegPCMAudio(track.url, **FFMPEG_OPTIONS)
+            source = discord.FFmpegPCMAudio(track.uri, executable="./bin/ffmpeg", **FFMPEG_OPTIONS)
             vc.play(source, after=lambda e: bot.loop.call_soon_threadsafe(play_next_audio, vc, interaction.guild.id))
             
             embed = NowPlayingView(track, interaction.user) 
@@ -675,7 +675,7 @@ async def previous_track(interaction: discord.Interaction):
     player.current = real_previous
     vc.stop()
     
-    source = discord.FFmpegPCMAudio(real_previous.uri, **FFMPEG_OPTIONS)
+    source = discord.FFmpegPCMAudio(track.uri, executable="./bin/ffmpeg", **FFMPEG_OPTIONS)
     vc.play(source, after=lambda e: bot.loop.call_soon_threadsafe(play_next_audio, vc, interaction.guild.id))
     await interaction.response.send_message(f"rewinding back to: **{real_previous.title}**")
 
@@ -691,7 +691,7 @@ async def replay_track(interaction: discord.Interaction):
     track = player.current
     vc.stop()
     
-    source = discord.FFmpegPCMAudio(track.uri, **FFMPEG_OPTIONS)
+    source = discord.FFmpegPCMAudio(track.uri, executable="./bin/ffmpeg", **FFMPEG_OPTIONS)
     vc.play(source, after=lambda e: bot.loop.call_soon_threadsafe(play_next_audio, vc, interaction.guild.id))
     await interaction.response.send_message(f"replaying **{track.title}**")
 
@@ -818,7 +818,7 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
 
         if not vc.is_playing() and not vc.is_paused():
             player.current = track
-            source = discord.FFmpegPCMAudio(track.uri, **FFMPEG_OPTIONS)
+            source = discord.FFmpegPCMAudio(track.uri, executable="./bin/ffmpeg", **FFMPEG_OPTIONS)
             vc.play(source, after=lambda e: bot.loop.call_soon_threadsafe(play_next_audio, vc, interaction.guild.id))
             
             view_embed = FilePlayingView(track, interaction.user, attachment, guild=interaction.guild, has_cover=has_extracted_cover) 
