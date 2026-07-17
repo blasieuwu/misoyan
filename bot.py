@@ -129,7 +129,7 @@ FFMPEG_OPTIONS = {
 
 # yt-dlp extractor options profile
 ytdl = yt_dlp.YoutubeDL({
-    'format': 'bestaudio/best',
+    'format': 'bestaudio/best/highest',
     'noplaylist': True,
     'quiet': True,
     'default_search': 'ytsearch',
