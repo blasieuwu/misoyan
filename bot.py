@@ -136,7 +136,12 @@ ytdl = yt_dlp.YoutubeDL({
     'default_search': 'ytsearch',
     'source_address': '0.0.0.0',
     'cookiefile': '/etc/secrets/cookies.txt',
-    'js_runtimes': {'node': {}} 
+    'js_runtimes': {'node': {}}
+    'extractor_args': {
+        'youtubepot-bgutilhttp': {
+            'base_url': 'https://pof-token-generator.onrender.com'
+        }
+    }
 })
 
 def play_next_audio(vc, guild_id):
