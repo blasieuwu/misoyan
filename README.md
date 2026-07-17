@@ -11,6 +11,14 @@ im running on **python**, and im here to sit in your comfy vc 24/7, and i've got
   <img src="https://img.shields.io/badge/current_version-v1.2-black?style=for-the-badge&labelColor=black" alt="v1.1" />
 </p>
 
+<p align="center">github info:</p>
+<p align="center">
+  <img alt="GitHub commit activity" src="https://img.shields.io/github/commit-activity/t/blasieuwu/misoyan?style=for-the-badge&logo=github&logoColor=white&label=total%20commits&labelColor=black&color=black">
+  <img alt="GitHub last commit" src="https://img.shields.io/github/last-commit/blasieuwu/misoyan?display_timestamp=author&style=for-the-badge&logo=github&logoColor=white&label=last%20commit%20date&labelColor=black&color=black">
+  <img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/blasieuwu/misoyan?style=for-the-badge&logo=github&logoColor=white&label=stars&labelColor=black&color=black">
+  <img alt="python runtime" src="https://img.shields.io/github/actions/workflow/status/blasieuwu/misoyan/pyruntime.yml?style=for-the-badge&logo=github&logoColor=white&label=python%20runtime%20status&labelColor=black&color=black">
+</p>
+
 ---
 
 ## speaker commands
