@@ -585,7 +585,7 @@ async def play(interaction: discord.Interaction, search: str, timing: str = "que
             if timing == "replace":
                 # put the rest of the playlist at the front in order
                 for track in reversed(playlist_tracks[start_index:]):
-                    vc.queue.put_at_front(track)
+                    vc.queue.put_at(track, 1)
                 if start_index == 0:  # if player was already playing, swap current song out
                     await vc.skip()
                     embed = NowPlayingView(playlist_tracks[0], interaction.user, " (replaced with playlist)")
@@ -593,7 +593,7 @@ async def play(interaction: discord.Interaction, search: str, timing: str = "que
 
             elif timing == "next":
                 for track in reversed(playlist_tracks[start_index:]):
-                    vc.queue.put_at_front(track)
+                    vc.queue.put_at(track, 1)
                 if start_index == 0:
                     embed = QueuePopup(playlist_tracks[0], interaction.user, f"queued playlist '{playlist.name}' next!")
                     await interaction.followup.send(view=embed)
@@ -616,13 +616,13 @@ async def play(interaction: discord.Interaction, search: str, timing: str = "que
             return
 
         if timing == "replace":
-            vc.queue.put_at_front(track)
+            vc.queue.put_at(track, 1)
             await vc.skip()
             embed = NowPlayingView(track, interaction.user, " (replaced)")
             await interaction.followup.send(view=embed)
 
         elif timing == "next":
-            vc.queue.put_at_front(track)
+            vc.queue.put_at(track, 1)
             embed = QueuePopup(track, interaction.user, "playing next!")
             await interaction.followup.send(view=embed)
 
@@ -864,13 +864,13 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
             return
 
         if timing == "replace":
-            vc.queue.put_at_front(track)
+            vc.queue.put_at(track, 1)
             await vc.skip()
             view_embed = FilePlayingView(track, interaction.user, attachment, guild=interaction.guild, has_cover=has_extracted_cover)
             await interaction.followup.send(view=view_embed)
 
         elif timing == "next":
-            vc.queue.put_at_front(track)
+            vc.queue.put_at(track, 1)
             embed = QueuePopup(track, interaction.user, "playing next (file)!")
             await interaction.followup.send(view=embed)
 
