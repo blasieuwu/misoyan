@@ -637,6 +637,25 @@ async def play(interaction: discord.Interaction, search: str, timing: str = "que
     finally:
         misoyan_settings["is_connecting"] = False
 
+@bot.tree.command(name="now-playing", description="see what track is currently playing")
+async def now_playing(interaction: discord.Interaction):
+    if not misoyan_settings["all_features"]:
+        await interaction.response.send_message("my speakers are off rn (disabled)", ephemeral=True)
+        return
+
+    if interaction.user.id in misoyan_settings["blacklist"]:
+        await interaction.response.send_message("hey, don't touch that.", ephemeral=True)
+        return
+
+    vc: wavelink.Player = interaction.guild.voice_client
+    if not vc or not vc.connected or not vc.current:
+        await interaction.response.send_message("nothing is playing right now!", ephemeral=True)
+        return
+
+    track = vc.current
+    embed = NowPlayingView(track, interaction.user)
+    await interaction.response.send_message(view=embed)
+
 @bot.tree.command(name="playback", description="pause or unpause the current music playback")
 async def playback(interaction: discord.Interaction):
     if not misoyan_settings["all_features"]:
