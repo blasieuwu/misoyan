@@ -563,6 +563,50 @@ async def play(interaction: discord.Interaction, search: str, timing: str = "que
             await interaction.followup.send("i couldn't find anything with that search query :c", ephemeral=True)
             return
 
+        # check if the result is a playlist
+        if isinstance(tracks, wavelink.Playlist):
+            playlist: wavelink.Playlist = tracks
+            playlist_tracks = playlist.tracks
+
+            if not playlist_tracks:
+                await interaction.followup.send("that playlist seems to be empty or private :c", ephemeral=True)
+                return
+
+            # handle empty player state first
+            start_index = 0
+            if not vc.playing and not vc.paused:
+                first_track = playlist_tracks[0]
+                await vc.play(first_track)
+                embed = NowPlayingView(first_track, interaction.user, f" (playlist: {playlist.name})") 
+                await interaction.followup.send(view=embed)
+                start_index = 1  # we already started playing track 0, queue the rest
+
+            # handle queue timing for the playlist items
+            if timing == "replace":
+                # put the rest of the playlist at the front in order
+                for track in reversed(playlist_tracks[start_index:]):
+                    vc.queue.put_at_front(track)
+                if start_index == 0:  # if player was already playing, swap current song out
+                    await vc.skip()
+                    embed = NowPlayingView(playlist_tracks[0], interaction.user, " (replaced with playlist)")
+                    await interaction.followup.send(view=embed)
+
+            elif timing == "next":
+                for track in reversed(playlist_tracks[start_index:]):
+                    vc.queue.put_at_front(track)
+                if start_index == 0:
+                    embed = QueuePopup(playlist_tracks[0], interaction.user, f"queued playlist '{playlist.name}' next!")
+                    await interaction.followup.send(view=embed)
+
+            else:
+                for track in playlist_tracks[start_index:]:
+                    vc.queue.put(track)
+                if start_index == 0:
+                    embed = QueuePopup(playlist_tracks[0], interaction.user, f"added playlist '{playlist.name}' to queue!", len(vc.queue))
+                    await interaction.followup.send(view=embed)
+            return
+
+        # fallback behavior for standard single track search/links
         track: wavelink.Playable = tracks[0]
         
         if not vc.playing and not vc.paused:
