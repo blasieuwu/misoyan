@@ -204,9 +204,39 @@ async def connect_nodes():
     except Exception as e:
         print(f"[lavalink] fail to build node pipeline: {e}")
 
-@bot.event
-async def on_wavelink_node_ready(payload: wavelink.NodeReadyEventPayload):
-    print(f"[lavalink] node '{payload.session_id}' connected successfully and is ready to stream!")
+class NodeAwarenessCog(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    @commands.Cog.listener()
+    async def on_wavelink_node_ready(self, payload: wavelink.NodeReadyEventPayload):
+        """triggered whenever misoyan connects/reconnects to the lavalink node."""
+        node = payload.node
+        print(f"[wavelink] connected to node: {node.identifier} | session id: {payload.session_id}")
+
+        # payload.resumed is False when lavalink node was restarted, redeployed, or lost session state
+        if not payload.resumed:
+            print("[wavelink] lavalink node was refreshed/redeployed! cleaning up orphaned players...")
+
+            # iterate over active players connected across all guilds
+            for guild in self.bot.guilds:
+                player: wavelink.Player = guild.voice_client
+
+                if player:
+                    # fetch text channel tied to the player if present to notify users
+                    channel = getattr(player, "home", None)
+                    if channel:
+                        try:
+                            await channel.send("refreshing players...\n-# node was refreshed | blasieuwu/misoyan-lavalink-node")
+                        except discord.HTTPException:
+                            pass
+
+                    # force disconnect player to clean up websocket & voice state
+                    await player.disconnect()
+                    print(f"[wavelink] disconnected player in guild {guild.id}")
+
+        else:
+            print("[wavelink] lavalink session successfully resumed! players are intact.")
 
 @tasks.loop(seconds=15)
 async def native_voice_sentinel_loop():
@@ -271,6 +301,9 @@ async def cycle_status_loop():
 @bot.event
 async def on_ready():
     print(f"ah, time to go on discord | {bot.user.name}")
+
+    print("[wavelink] starting node listener")
+    await bot.add_cog(NodeAwarenessCog(bot))
     
     # establish connection to our lavalink nodes
     bot.loop.create_task(connect_nodes())
