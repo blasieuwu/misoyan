@@ -223,11 +223,21 @@ class NodeAwarenessCog(commands.Cog):
                 player: wavelink.Player = guild.voice_client
 
                 if player:
-                    # fetch text channel tied to the player if present to notify users
-                    channel = getattr(player, "home", None)
-                    if channel:
+                    # find the server's system channel, or fallback to the first sendable text channel
+                    target_channel = guild.system_channel
+                    if not target_channel or not target_channel.permissions_for(guild.me).send_messages:
+                        target_channel = next(
+                            (c for c in guild.text_channels if c.permissions_for(guild.me).send_messages),
+                            None
+                        )
+
+                    # alert the server if a valid text channel was found
+                    if target_channel:
                         try:
-                            await channel.send("refreshing players...\n-# node was refreshed | blasieuwu/misoyan-lavalink-node")
+                            await target_channel.send(
+                                "refreshing players...\n"
+                                "-# node was refreshed | blasieuwu/misoyan-lavalink-node"
+                            )
                         except discord.HTTPException:
                             pass
 
