@@ -1061,10 +1061,10 @@ async def restrict_user(interaction: discord.Interaction, target: discord.User):
 
     if target.id in misoyan_settings["blacklist"]:
         misoyan_settings["blacklist"].remove(target.id)
-        await interaction.response.send_message(f"yay! {target.mention} is now allowed to speak to me again :3")
+        await interaction.response.send_message(f"yay! {target.mention} is now allowed to speak to me again :3", ephemeral=True)
     else:
         misoyan_settings["blacklist"].add(target.id)
-        await interaction.response.send_message(f"get lost! {target.mention} has been blacklisted.")
+        await interaction.response.send_message(f"get lost! {target.mention} has been blacklisted.", ephemeral=True)
 
 @bot.tree.command(name="webhook", description="[blasie-only] create a new webhook :o")
 @app_commands.describe(message="atleast give it a name :P")
