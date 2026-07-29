@@ -318,13 +318,24 @@ async def on_message(message: discord.Message):
     
     # --- afk section | start ---
     if message.author.id in afk_users:
-        reason = afk_users.pop(message.author.id)
+        data = afk_users.pop(message.author.id)
+        original_nick = data["original_nick"]
+
+        # revert nickname back to original
+        try:
+            # passing None resets it if they didn't have a custom server nick before
+            await message.author.edit(nick=original_nick if message.author.nick else None)
+        except discord.Forbidden:
+            pass
+        except Exception as e:
+            print(f"failed to restore nickname: {e}")
+
         await message.channel.send(f"welcome back, {message.author.mention}. you're no longer afk.")
     
     for mentioned_user in message.mentions:
         if mentioned_user.id in afk_users:
-            reason = afk_users[mentioned_user.id]
-            await message.channel.send(f"hey, {mentioned_user.name}'s afk.\n~> reason: '*{reason}'*")
+            reason = afk_users[mentioned_user.id]["reason"]
+            await message.channel.send(f"hey, {mentioned_user.name}'s afk.\n~> reason: '*{reason}*'")
     # --- afk section | end ---
 
     if not misoyan_settings["all_features"] or message.author.id in misoyan_settings["blacklist"]:
@@ -343,9 +354,29 @@ async def on_message(message: discord.Message):
 @bot.tree.command(name="afk", description="tell people you're busy")
 @app_commands.describe(reason="why you're away")
 async def afk(interaction: discord.Interaction, reason: str = "busy :3"):
-    afk_users[interaction.user.id] = reason
-    await interaction.response.send_message(f"ok, you're afk with reason: '*{reason}*'", ephemeral=True)
+    # store both the reason and their original display name/nickname
+    original_nick = interaction.user.nick or interaction.user.name
+    afk_users[interaction.user.id] = {
+        "reason": reason,
+        "original_nick": original_nick
+    }
 
+    # try updating their server nickname
+    try:
+        new_nick = f"[AFK] {original_nick}"
+        # discord caps nicknames at 32 characters
+        if len(new_nick) > 32:
+            new_nick = new_nick[:32]
+            
+        await interaction.user.edit(nick=new_nick)
+    except discord.Forbidden:
+        # bot lacks 'manage_nicknames' permission or user is server owner / higher role
+        pass
+    except Exception as e:
+        print(f"failed to change nickname: {e}")
+
+    await interaction.response.send_message(f"ok, you're afk with reason: '*{reason}*'", ephemeral=True)
+    
 @bot.tree.command(name="ping", description="check misoyan's reflexes")
 async def ping(interaction: discord.Interaction):
     latency = round(bot.latency * 1000)
