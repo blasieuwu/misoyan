@@ -185,7 +185,7 @@ class MisoyanBot(commands.Bot):
         node = wavelink.Node(
             identifier="misoyan",
             uri=uri,
-            password=LAVALINK_PASS,[cite: 1]
+            password=LAVALINK_PASS[cite: 1]
         )
         try:
             await wavelink.Pool.connect(nodes=[node], client=self)[cite: 1]
