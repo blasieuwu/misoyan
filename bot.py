@@ -180,44 +180,44 @@ class FullSystemControlPanel(discord.ui.View):
 class MisoyanBot(commands.Bot):
     async def setup_hook(self):
         # 1. connect lavalink nodes once on boot
-        protocol = "https" if LAVALINK_SECURE else "http"[cite: 1]
-        uri = f"{protocol}://{LAVALINK_HOST}:{LAVALINK_PORT}"[cite: 1]
+        protocol = "https" if LAVALINK_SECURE else "http"
+        uri = f"{protocol}://{LAVALINK_HOST}:{LAVALINK_PORT}"
         node = wavelink.Node(
             identifier="misoyan",
             uri=uri,
-            password=LAVALINK_PASS[cite: 1]
+            password=LAVALINK_PASS
         )
         try:
-            await wavelink.Pool.connect(nodes=[node], client=self)[cite: 1]
+            await wavelink.Pool.connect(nodes=[node], client=self)
             print("[lavalink] connected node pool!")
         except Exception as e:
-            print(f"[lavalink] node failed: {e}")[cite: 1]
+            print(f"[lavalink] node failed: {e}")
 
         # 2. sync slash commands ONCE on boot (this prevents rate limits!)
         try:
-            synced = await self.tree.sync()[cite: 1]
-            print(f"i got {len(synced)} commands ready :o")[cite: 1]
+            synced = await self.tree.sync()
+            print(f"i got {len(synced)} commands ready :o")
         except Exception as e:
             print(f"failed to sync commands: {e}")
 
 # initialize the bot instance
 bot = MisoyanBot(
     command_prefix="!", 
-    intents=intents,[cite: 1]
-    heartbeat_timeout=60.0,[cite: 1]
-    ws_close_timeout=10.0[cite: 1]
+    intents=intents,
+    heartbeat_timeout=60.0,
+    ws_close_timeout=10.0
 )
 
 @bot.event
 async def on_ready():
-    print(f"ah, time to go on discord | {bot.user.name}")[cite: 1]
+    print(f"ah, time to go on discord | {bot.user.name}")
         
     # safe to start loops here since they check if they're already running
     if not cycle_status_loop.is_running():
-        cycle_status_loop.start()[cite: 1]
+        cycle_status_loop.start()
         
     if not native_voice_sentinel_loop.is_running():
-        native_voice_sentinel_loop.start()[cite: 1]
+        native_voice_sentinel_loop.start()
 
 @bot.event
 async def on_wavelink_track_end(payload: wavelink.TrackEndEventPayload):
