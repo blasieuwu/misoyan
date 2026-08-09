@@ -51,7 +51,7 @@ here are some cool commands you can use:
 | `/ping` | i dont like my reflexes getting tested.. but you can do that, but expect me to not like it >:( |
 | `/status` | see my cool logs and info :D |
 | `/timer` | tick tock *[insert white rabbit meme]* |
-
+| `/afk` | let your cool silly friends know youre afk! |
 ---
 
 ## server owner/administrator/blasie-only commands
