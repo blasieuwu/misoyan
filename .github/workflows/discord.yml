@@ -18,11 +18,30 @@ jobs:
           SHORT_SHA: ${{ github.event.head_commit.id }}
           WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          # extract repository owner from "owner/repo"
+          # extract repo owner from "owner/repo"
           REPO_OWNER=$(echo "$REPO_FULL" | cut -d'/' -f1)
 
           SHORT_SHA_TRIMMED="${SHORT_SHA:0:7}"
           CLEAN_MSG=$(echo "$COMMIT_MSG" | head -n 1)
+
+          # count total commits in this push event
+          COMMIT_COUNT=$(echo '${{ toJson(github.event.commits) }}' | jq 'length')
+          
+          # fallback to 1 if commits array is empty (e.g. forced pushes or edge cases)
+          if [ -z "$COMMIT_COUNT" ] || [ "$COMMIT_COUNT" -eq 0 ]; then
+            COMMIT_COUNT=1
+          fi
+
+          # pluralize text dynamically
+          if [ "$COMMIT_COUNT" -eq 1 ]; then
+            COMMIT_TEXT="1 new commit"
+          else
+            COMMIT_TEXT="$COMMIT_COUNT new commits"
+          fi
+
+          # build full target urls
+          REPO_URL="https://github.com/$REPO_FULL/tree/$BRANCH"
+          COMMIT_URL="https://github.com/$REPO_FULL/commit/$SHORT_SHA"
 
           PAYLOAD=$(jq -n \
             --arg owner "$REPO_OWNER" \
@@ -31,6 +50,9 @@ jobs:
             --arg branch "$BRANCH" \
             --arg msg "$CLEAN_MSG" \
             --arg sha "$SHORT_SHA_TRIMMED" \
+            --arg count_text "$COMMIT_TEXT" \
+            --arg repo_url "$REPO_URL" \
+            --arg commit_url "$COMMIT_URL" \
             '{
               username: "GitHub Actions",
               avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
@@ -42,7 +64,7 @@ jobs:
                   components: [
                     {
                       type: 10,
-                      content: "<:github:1535885661683589161> changes in **\($owner)**'\''s repositories:\n## [\($repo) • \($branch)] 1 new commit\n"
+                      content: "<:github:1535885661683589161> changes in **\($owner)**'\''s repositories:\n## [[\($repo) • \($branch)] \($count_text)](\($repo_url))\n"
                     },
                     {
                       type: 14,
@@ -51,7 +73,7 @@ jobs:
                     },
                     {
                       type: 10,
-                      content: "- [`\($sha)`] \($msg) • **\($actor)**"
+                      content: "- [[`\($sha)`](\($commit_url))] \($msg) • **\($actor)**"
                     },
                     {
                       type: 14,
