@@ -1,0 +1,82 @@
+name: discord notify
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: send discord message
+        env:
+          ACTOR: ${{ github.actor }}
+          REPO_FULL: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          SHORT_SHA: ${{ github.event.head_commit.id }}
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          # extract repository owner from "owner/repo"
+          REPO_OWNER=$(echo "$REPO_FULL" | cut -d'/' -f1)
+
+          SHORT_SHA_TRIMMED="${SHORT_SHA:0:7}"
+          CLEAN_MSG=$(echo "$COMMIT_MSG" | head -n 1)
+
+          PAYLOAD=$(jq -n \
+            --arg owner "$REPO_OWNER" \
+            --arg actor "$ACTOR" \
+            --arg repo "$REPO_FULL" \
+            --arg branch "$BRANCH" \
+            --arg msg "$CLEAN_MSG" \
+            --arg sha "$SHORT_SHA_TRIMMED" \
+            '{
+              username: "GitHub Actions",
+              avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
+              flags: 32768,
+              components: [
+                {
+                  type: 17,
+                  accent_color: 9895830,
+                  components: [
+                    {
+                      type: 10,
+                      content: "<:github:1535885661683589161> changes in **\($owner)**'\''s repositories:\n## [\($repo) • \($branch)] 1 new commit\n"
+                    },
+                    {
+                      type: 14,
+                      divider: true,
+                      spacing: 1
+                    },
+                    {
+                      type: 10,
+                      content: "- [`\($sha)`] \($msg) • **\($actor)**"
+                    },
+                    {
+                      type: 14,
+                      divider: true,
+                      spacing: 1
+                    },
+                    {
+                      type: 10,
+                      content: "-# embed made by [@blasieuwu](https://blasieuwu.neocities.org)"
+                    }
+                  ]
+                }
+              ]
+            }')
+
+          TARGET_URL="${WEBHOOK_URL}&thread_id=1515741593213341817"
+
+          response=$(curl -s -o /tmp/discord_res.txt -w "%{http_code}" \
+            -H "Content-Type: application/json" \
+            -X POST \
+            -d "$PAYLOAD" \
+            "$TARGET_URL")
+
+          if [ "$response" -ne 200 ] && [ "$response" -ne 204 ]; then
+            echo "discord webhook failed with http $response"
+            cat /tmp/discord_res.txt
+            exit 1
+          fi
