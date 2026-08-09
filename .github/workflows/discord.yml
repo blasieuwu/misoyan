@@ -67,7 +67,7 @@ jobs:
               ]
             }')
 
-          TARGET_URL="${WEBHOOK_URL}&thread_id=1515741593213341817"
+          TARGET_URL="${WEBHOOK_URL}?with_components=true&thread_id=1515741593213341817"
 
           response=$(curl -s -o /tmp/discord_res.txt -w "%{http_code}" \
             -H "Content-Type: application/json" \
