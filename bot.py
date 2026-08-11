@@ -5,7 +5,7 @@ import re
 import random  # keeps random.choice from crashing her
 import threading  # handles the background web server thread
 import aiohttp # for webhook avatar
-from http.server import BaseHTTPRequestHandler, HTTPServer  # basic server classes
+from http.server import SimpleHTTPRequestHandler, HTTPServer  # basic server classes
 import discord
 from discord import app_commands, ui
 from discord.ext import commands, tasks
@@ -20,6 +20,14 @@ intents.voice_states = True     # spy on vc
 
 # blasie's id
 creator_id = int(os.environ.get("CREATOR_ID", 0))
+
+# compiler needs this
+bot = commands.Bot(
+    command_prefix="!", 
+    intents=intents,
+    heartbeat_timeout=60.0,    # gives her a full minute to recover if discord drops a gateway packet
+    ws_close_timeout=10.0      # cleans up dead sockets fast so she can immediately re-handshake
+)
 
 afk_users = {} # for the /afk command
 
@@ -177,86 +185,105 @@ class FullSystemControlPanel(discord.ui.View):
         self.update_panel_layout()
         await interaction.response.edit_message(embed=self.generate_dashboard_embed(), view=self)
 
-class MisoyanBot(commands.Bot):
-    async def setup_hook(self):
-        # 1. connect lavalink nodes once on boot
-        protocol = "https" if LAVALINK_SECURE else "http"
-        uri = f"{protocol}://{LAVALINK_HOST}:{LAVALINK_PORT}"
-        node = wavelink.Node(
-            identifier="misoyan",
-            uri=uri,
-            password=LAVALINK_PASS
-        )
-        try:
-            await wavelink.Pool.connect(nodes=[node], client=self)
-            print("[lavalink] connected node pool!")
-        except Exception as e:
-            print(f"[lavalink] node failed: {e}")
-
-        # 2. sync slash commands ONCE on boot (this prevents rate limits!)
-        try:
-            synced = await self.tree.sync()
-            print(f"i got {len(synced)} commands ready :o")
-        except Exception as e:
-            print(f"failed to sync commands: {e}")
-
-# initialize the bot instance
-bot = MisoyanBot(
-    command_prefix="!", 
-    intents=intents,
-    heartbeat_timeout=60.0,
-    ws_close_timeout=10.0
-)
-
-# background status cycling loop
-@tasks.loop(minutes=2.5)
-async def cycle_status_loop():
-    if not misoyan_settings["all_features"] or not misoyan_settings["status_changes"]:
-        return
-
-    # dynamic loop interval adjustment
-    if misoyan_settings["status_change_delay"]:
-        cycle_status_loop.change_interval(minutes=1.0)
-    else:
-        cycle_status_loop.change_interval(minutes=2.5)
-
-    status, activity = random.choice(status_pool)
+async def connect_nodes():
+    """sets up the connection with our external lavalink server node"""
+    await bot.wait_until_ready()
+    
+    protocol = "https" if LAVALINK_SECURE else "http"
+    uri = f"{protocol}://{LAVALINK_HOST}:{LAVALINK_PORT}"
+    
+    node = wavelink.Node(
+        identifier="misoyan",
+        uri=uri,
+        password=LAVALINK_PASS,
+    )
+    
     try:
-        await bot.change_presence(status=status, activity=activity)
+        await wavelink.Pool.connect(nodes=[node], client=bot)
+        print("[lavalink] successfully built a connection with our node pool!")
     except Exception as e:
-        print(f"[status] failed to change presence: {e}")
+        print(f"[lavalink] fail to build node pipeline: {e}")
 
-# sentinel loop for handling auto reconnection to vc
-@tasks.loop(seconds=10)
+@tasks.loop(seconds=15)
 async def native_voice_sentinel_loop():
+    """automatically monitors, isolates, and heals crashes silently without spamming dead transport pipes"""
     if not misoyan_settings["all_features"] or not misoyan_settings["vc_joining"]:
         return
 
-    if misoyan_settings["need_reconnection"] and not misoyan_settings["is_connecting"]:
-        if target_voice_channel_id and not vc_connection_lock.locked():
-            async with vc_connection_lock:
-                try:
-                    misoyan_settings["is_connecting"] = True
-                    channel = bot.get_channel(target_voice_channel_id)
-                    if channel and isinstance(channel, discord.VoiceChannel):
-                        print(f"[sentinel] reconnecting to vc: {channel.name}")
-                        await channel.connect(cls=wavelink.Player)
-                        misoyan_settings["need_reconnection"] = False
-                except Exception as e:
-                    print(f"[sentinel] vc reconnection failed: {e}")
-                finally:
-                    misoyan_settings["is_connecting"] = False
+    if misoyan_settings["is_connecting"] or vc_connection_lock.locked():
+        return
+
+    global target_voice_channel_id
+    home_channel = bot.get_channel(target_voice_channel_id)
+    if not home_channel or not isinstance(home_channel, discord.VoiceChannel):
+        return
+
+    vc: wavelink.Player = home_channel.guild.voice_client
+    is_disconnected = not vc or not vc.connected
+
+    if is_disconnected or misoyan_settings["need_reconnection"]:
+        async with vc_connection_lock:
+            print("wait im reconnecting pls wait for me")
+            misoyan_settings["is_connecting"] = True
+            
+            try:
+                if home_channel.guild.voice_client:
+                    try:
+                        await home_channel.guild.voice_client.disconnect(force=True)
+                        await asyncio.sleep(1.5)
+                    except Exception:
+                        pass
+
+                await home_channel.connect(cls=wavelink.Player)
+                print("im back :3")
+                misoyan_settings["need_reconnection"] = False
+                
+            except Exception as e:
+                print(f"so uhh, my wifi broke: {e}")
+                if "closing transport" in str(e).lower() or "timeout" in str(e).lower():
+                    misoyan_settings["need_reconnection"] = False
+                await asyncio.sleep(8.0)
+            finally:
+                misoyan_settings["is_connecting"] = False
+
+@tasks.loop(minutes=2.5)
+async def cycle_status_loop():
+    await bot.wait_until_ready()
+    if not misoyan_settings["all_features"] or not misoyan_settings["status_changes"]:
+        return
+
+    current_interval = cycle_status_loop.minutes
+    if misoyan_settings["status_change_delay"] and current_interval != 1.0:
+        cycle_status_loop.change_interval(minutes=1.0)
+    elif not misoyan_settings["status_change_delay"] and current_interval != 2.5:
+        cycle_status_loop.change_interval(minutes=2.5)
+
+    selected_status, selected_note = random.choice(status_pool)
+    try:
+        await bot.change_presence(status=selected_status, activity=selected_note)
+    except Exception as e:
+        print(f"yeah i couldnt change my discord status: {e}")
 
 @bot.event
 async def on_ready():
     print(f"ah, time to go on discord | {bot.user.name}")
+    
+    # establish connection to our lavalink nodes
+    bot.loop.create_task(connect_nodes())
+    
+    try:
+        synced = await bot.tree.sync()
+        print(f"i got {len(synced)} commands ready :o")
+    except Exception as e:
+        print(f"wait where did my commands go- | {e}")
         
-    # safe to start loops here since they check if they're already running
     if not cycle_status_loop.is_running():
         cycle_status_loop.start()
+        print("time to pick a status i guess.")
         
     if not native_voice_sentinel_loop.is_running():
         native_voice_sentinel_loop.start()
+        print("time to set up my speakers for music")
 
 @bot.event
 async def on_wavelink_track_end(payload: wavelink.TrackEndEventPayload):
@@ -1103,7 +1130,7 @@ async def create_webhook(interaction: discord.Interaction, message: str = "a web
         await interaction.response.send_message("hmph, you can't do that (text channels only)", ephemeral = True)
 
 # --- keepalive web server section ---
-class KeepAliveHandler(BaseHTTPRequestHandler):
+class KeepAliveHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.send_header("Content-type", "text/plain")
