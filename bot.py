@@ -1166,7 +1166,9 @@ def handle_loop_exception(loop, context):
 
 if __name__ == "__main__":
     if bot_token:
-        loop = asyncio.get_event_loop()
+        # use new_event_loop() for python 3.12+ / 3.14 compatibility
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         loop.set_exception_handler(handle_loop_exception)
         bot.run(bot_token)
     else:
