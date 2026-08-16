@@ -105,6 +105,23 @@ reply_list = [
 
 os.makedirs("cache", exist_ok=True)
 
+async def handle_ping(request):
+    """health check route: checks if the bot is actually ready and online"""
+    if not bot.is_ready() or bot.is_closed():
+        return web.Response(text="bot is offline or unready :c", status=503)
+    return web.Response(text="fih fih fih :3", status=200)
+
+async def start_web_server():
+    """runs the keepalive web server directly on the main asyncio event loop"""
+    app = web.Application()
+    app.router.add_get('/', handle_ping)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(render_port) if render_port else 8080
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    print(f"hosting my little keepalive heart on port {port} :o")
+
 class FullSystemControlPanel(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -267,6 +284,9 @@ async def cycle_status_loop():
 @bot.event
 async def on_ready():
     print(f"ah, time to go on discord | {bot.user.name}")
+
+    # start the web server
+    await start_web_server()
     
     # establish connection to our lavalink nodes
     bot.loop.create_task(connect_nodes())
@@ -1129,25 +1149,16 @@ async def create_webhook(interaction: discord.Interaction, message: str = "a web
     else:
         await interaction.response.send_message("hmph, you can't do that (text channels only)", ephemeral = True)
 
-# --- keepalive web server section ---
-class KeepAliveHandler(SimpleHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.send_header("Content-type", "text/plain")
-        self.end_headers()
-        self.wfile.write(b"fih fih fih :3")
-
-def run_web_server():
-    port = int(render_port) if render_port else 8080
-    server = HTTPServer(("0.0.0.0", port), KeepAliveHandler)
-    print(f"hosting my little keepalive heart on port {port} :o")
-    server.serve_forever()
+def handle_loop_exception(loop, context):
+    """ensures unhandled async task exceptions trigger a full process exit code for render"""
+    msg = context.get("exception", context.get("message"))
+    print(f"[CRITICAL] unhandled loop exception: {msg}")
+    sys.exit(1)
 
 if __name__ == "__main__":
-    web_thread = threading.Thread(target=run_web_server, daemon=True)
-    web_thread.start()
-    
     if bot_token:
+        loop = asyncio.get_event_loop()
+        loop.set_exception_handler(handle_loop_exception)
         bot.run(bot_token)
     else:
         print("where is my token??")
