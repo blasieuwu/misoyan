@@ -238,8 +238,7 @@ async def connect_nodes():
         identifier="misoyan",
         uri=uri,
         password=LAVALINK_PASS,
-        client=bot,
-        headers={"Client-Name": "misoyan/1.0"}
+        client=bot
     )
     
     try:
