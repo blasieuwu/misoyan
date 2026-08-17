@@ -249,8 +249,10 @@ async def native_voice_sentinel_loop():
 
     if is_disconnected or misoyan_settings["need_reconnection"]:
         async with vc_connection_lock:
-            print("wait im reconnecting pls wait for me")
+            # reset flag BEFORE connecting to break the trigger loop
+            misoyan_settings["need_reconnection"] = False
             misoyan_settings["is_connecting"] = True
+            print("wait im reconnecting pls wait for me")
             
             try:
                 if home_channel.guild.voice_client:
@@ -260,15 +262,13 @@ async def native_voice_sentinel_loop():
                     except Exception:
                         pass
 
-                await home_channel.connect(cls=wavelink.Player)
+                await home_channel.connect(cls=wavelink.Player, timeout=15.0)
                 print("im back :3")
-                misoyan_settings["need_reconnection"] = False
                 
             except Exception as e:
                 print(f"so uhh, my wifi broke: {e}")
-                if "closing transport" in str(e).lower() or "timeout" in str(e).lower():
-                    misoyan_settings["need_reconnection"] = False
-                await asyncio.sleep(8.0)
+                # cool down to prevent rapid reconnection loops
+                await asyncio.sleep(10.0)
             finally:
                 misoyan_settings["is_connecting"] = False
 
@@ -333,7 +333,8 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
     if member.id != bot.user.id:
         return
 
-    if after.channel is None or after.channel.id != target_voice_channel_id:
+    # only trigger if the bot was actually disconnected from the target channel
+    if before.channel and before.channel.id == target_voice_channel_id and (after.channel is None or after.channel.id != target_voice_channel_id):
         print("wait im not in my vc anymore give me a sec")
         
         if misoyan_settings["all_features"] and misoyan_settings["vc_joining"]:
