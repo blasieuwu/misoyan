@@ -14,6 +14,16 @@ import wavelink  # powers her speakers
 from mutagen.mp3 import MP3 # for the file cover art embedding
 from mutagen.id3 import ID3
 import logging
+import wavelink.player
+
+_original_update = wavelink.player.Player._update_state
+
+async def _patched_update_state(self, state):
+    if "guild_id" in state and "guildId" not in state:
+        state["guildId"] = state["guild_id"]
+    return await _original_update(self, state)
+
+wavelink.player.Player._update_state = _patched_update_state
 
 # logging
 logging.basicConfig(level=logging.INFO)
@@ -215,7 +225,7 @@ class FullSystemControlPanel(discord.ui.View):
         misoyan_settings["status_change_delay"] = not misoyan_settings["status_change_delay"]
         self.update_panel_layout()
         await interaction.response.edit_message(embed=self.generate_dashboard_embed(), view=self)
-
+:
 async def connect_nodes():
     """sets up the connection with our external lavalink server node"""
     await bot.wait_until_ready()
@@ -227,7 +237,8 @@ async def connect_nodes():
         identifier="misoyan",
         uri=uri,
         password=LAVALINK_PASS,
-        client=bot
+        client=bot,
+        headers={"Client-Name": "misoyan/1.0"}
     )
     
     try:
