@@ -225,7 +225,7 @@ class FullSystemControlPanel(discord.ui.View):
         misoyan_settings["status_change_delay"] = not misoyan_settings["status_change_delay"]
         self.update_panel_layout()
         await interaction.response.edit_message(embed=self.generate_dashboard_embed(), view=self)
-:
+
 async def connect_nodes():
     """sets up the connection with our external lavalink server node"""
     await bot.wait_until_ready()
