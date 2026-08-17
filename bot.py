@@ -13,6 +13,11 @@ from discord.ext import commands, tasks
 import wavelink  # powers her speakers
 from mutagen.mp3 import MP3 # for the file cover art embedding
 from mutagen.id3 import ID3
+import logging
+
+# logging
+logging.basicConfig(level=logging.INFO)
+logging.getLogger("wavelink").setLevel(logging.DEBUG)
 
 # handle sigterm gracefully when render stops/restarts the container
 def handle_sigterm(*args):
@@ -222,6 +227,7 @@ async def connect_nodes():
         identifier="misoyan",
         uri=uri,
         password=LAVALINK_PASS,
+        client=bot
     )
     
     try:
@@ -262,7 +268,7 @@ async def native_voice_sentinel_loop():
                     except Exception:
                         pass
 
-                await home_channel.connect(cls=wavelink.Player, timeout=15.0)
+                await home_channel.connect(cls=wavelink.Player, timeout=15.0, self_deaf=True)
                 print("im back :3")
                 
             except Exception as e:
@@ -435,7 +441,7 @@ async def join(interaction: discord.Interaction):
         try:
             misoyan_settings["is_connecting"] = True
             print(f"connecting to vc: {user_channel.name}")
-            await user_channel.connect(cls=wavelink.Player)
+            await user_channel.connect(cls=wavelink.Player, self_deaf=True)
             misoyan_settings["need_reconnection"] = False
             await interaction.followup.send("im in your vc now :D")
         except Exception as e:
@@ -607,7 +613,7 @@ async def play(interaction: discord.Interaction, search: str, timing: str = "que
             async with vc_connection_lock:
                 misoyan_settings["is_connecting"] = True
                 print(f"[/play] connecting to vc: {user_channel.name}")
-                vc = await user_channel.connect(cls=wavelink.Player)
+                vc = await user_channel.connect(cls=wavelink.Player, self_deaf=True)
                 global target_voice_channel_id
                 target_voice_channel_id = user_channel.id
                 misoyan_settings["need_reconnection"] = False
@@ -886,7 +892,7 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
         if not vc or not vc.connected:
             misoyan_settings["is_connecting"] = True
             print(f"[play-file] connecting to vc: {user_channel.name}")
-            vc = await user_channel.connect(cls=wavelink.Player)
+            vc = await user_channel.connect(cls=wavelink.Player, self_deaf=True)
             global target_voice_channel_id
             target_voice_channel_id = user_channel.id
             misoyan_settings["need_reconnection"] = False
