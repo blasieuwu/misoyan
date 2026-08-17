@@ -16,16 +16,6 @@ from mutagen.id3 import ID3
 import logging
 import wavelink.player
 
-_original_dispatch = wavelink.player.Player._dispatch_voice_update
-
-async def _patched_dispatch_voice_update(self, voice_data: dict) -> None:
-    # nodelink requires both camelCase and snake_case keys in voice updates
-    if "guild_id" in voice_data and "guildId" not in voice_data:
-        voice_data["guildId"] = voice_data["guild_id"]
-    return await _original_dispatch(self, voice_data)
-
-wavelink.player.Player._dispatch_voice_update = _patched_dispatch_voice_update
-
 # logging
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("wavelink").setLevel(logging.DEBUG)
