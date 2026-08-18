@@ -226,11 +226,11 @@ async def connect_nodes():
     try:
         await pomice.NodePool.create_node(
             bot=bot,
-            host=LAVALINK_HOST,
-            port=LAVALINK_PORT,
+            host=f"https://{LAVALINK_HOST}",  # or "wss://..."
+            port=LAVALINK_PORT,               # 443
             identifier="misoyan",
             password=LAVALINK_PASS,
-            secure=LAVALINK_SECURE
+            fallback=False
         )
         print("[lavalink] successfully built a connection with our node pool!")
     except Exception as e:
