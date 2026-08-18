@@ -4,3 +4,4 @@ davey
 lava-lyra
 yt-dlp[default]
 mutagen
+typing_extensions
