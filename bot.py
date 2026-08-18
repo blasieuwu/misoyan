@@ -10,15 +10,14 @@ from aiohttp import web
 import discord
 from discord import app_commands, ui
 from discord.ext import commands, tasks
-import wavelink  # powers her speakers
+import mafic  # powers her speakers
 from mutagen.mp3 import MP3 # for the file cover art embedding
 from mutagen.id3 import ID3
 import logging
-import wavelink.player
 
 # logging
 logging.basicConfig(level=logging.INFO)
-logging.getLogger("wavelink").setLevel(logging.DEBUG)
+logging.getLogger("mafic").setLevel(logging.DEBUG)
 
 # handle sigterm gracefully when render stops/restarts the container
 def handle_sigterm(*args):
@@ -35,8 +34,13 @@ intents.voice_states = True     # spy on vc
 # blasie's id
 creator_id = int(os.environ.get("CREATOR_ID", 0))
 
+class CustomBot(commands.Bot):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.pool = mafic.NodePool(self)
+
 # compiler needs this
-bot = commands.Bot(
+bot = CustomBot(
     command_prefix="!", 
     intents=intents,
     heartbeat_timeout=60.0,    # gives her a full minute to recover if discord drops a gateway packet
@@ -61,7 +65,7 @@ LAVALINK_SECURE = os.environ.get("LAVALINK_SECURE", "false").lower() in ("true",
 misoyan_settings = {
     "all_features": True,           # "nah, i'm going offline for a bit"
     "vc_joining": True,             # "cant join vc im busy"
-    "vc_leaving": True,             # yeah i can hold the vc for a bit
+    "vc_leaving": True,             # yeah i can hold the vc for a bit"
     "status_changes": True,         # maybe i wont make a note rn...
     "status_change_delay": False,   # "wait i should do this... NO WAIT THIS IS-"
     "fih_replies": False,            # fih :3 (changed to false cuz shes annoying)
@@ -220,26 +224,14 @@ class FullSystemControlPanel(discord.ui.View):
 async def connect_nodes():
     await bot.wait_until_ready()
     
-    # clear old pool connections if present
-    if wavelink.Pool.nodes:
-        for node in list(wavelink.Pool.nodes.values()):
-            try:
-                await node.close()
-            except Exception:
-                pass
-
-    protocol = "https" if LAVALINK_SECURE else "http"
-    uri = f"{protocol}://{LAVALINK_HOST}:{LAVALINK_PORT}"
-    
-    node = wavelink.Node(
-        identifier="misoyan",
-        uri=uri,
-        password=LAVALINK_PASS,
-        client=bot
-    )
-    
     try:
-        await wavelink.Pool.connect(nodes=[node], client=bot)
+        await bot.pool.create_node(
+            host=LAVALINK_HOST,
+            port=LAVALINK_PORT,
+            label="misoyan",
+            password=LAVALINK_PASS,
+            secure=LAVALINK_SECURE
+        )
         print("[lavalink] successfully built a connection with our node pool!")
     except Exception as e:
         print(f"[lavalink] fail to build node pipeline: {e}")
@@ -258,7 +250,7 @@ async def native_voice_sentinel_loop():
     if not home_channel or not isinstance(home_channel, discord.VoiceChannel):
         return
 
-    vc: wavelink.Player = home_channel.guild.voice_client
+    vc: mafic.Player = home_channel.guild.voice_client
     is_disconnected = not vc or not vc.connected
 
     if is_disconnected or misoyan_settings["need_reconnection"]:
@@ -276,7 +268,7 @@ async def native_voice_sentinel_loop():
                     except Exception:
                         pass
 
-                await home_channel.connect(cls=wavelink.Player, timeout=15.0, self_deaf=True)
+                await home_channel.connect(cls=mafic.Player, timeout=15.0, self_deaf=True)
                 print("im back :3")
                 
             except Exception as e:
@@ -329,23 +321,18 @@ async def on_ready():
         print("time to set up my speakers for music")
 
 @bot.event
-async def on_wavelink_track_end(payload: wavelink.TrackEndEventPayload):
-    """handles song transition workflows and queue loops natively via wavelink state machine"""
-    player: wavelink.Player = payload.player
+async def on_track_end(event: mafic.TrackEndEvent):
+    """handles song transition workflows and queue loops natively via mafic state machine"""
+    player: mafic.Player = event.player
     if not player:
         return
         
-    if not player.queue.is_empty:
-        next_track = player.queue.get()
+    if hasattr(player, "queue") and player.queue:
+        next_track = player.queue.pop(0)
         await player.play(next_track)
         print(f"[queue] automatically transitioning to: {next_track.title}")
     else:
         print("[queue] queue is now empty, going silent.")
-
-@bot.event
-async def on_wavelink_inactive_player(player: wavelink.Player):
-    # PREVENT WAVELINK FROM KILLING THE PLAYER SESSION WHEN IDLE
-    pass
 
 @bot.event
 async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
@@ -454,7 +441,7 @@ async def join(interaction: discord.Interaction):
         try:
             misoyan_settings["is_connecting"] = True
             print(f"connecting to vc: {user_channel.name}")
-            await user_channel.connect(cls=wavelink.Player, self_deaf=True)
+            await user_channel.connect(cls=mafic.Player, self_deaf=True)
             misoyan_settings["need_reconnection"] = False
             await interaction.followup.send("im in your vc now :D")
         except Exception as e:
@@ -469,7 +456,7 @@ async def leave(interaction: discord.Interaction):
         await interaction.response.send_message("you are not making me leave lmaooo (disabled)", ephemeral=True)
         return
     
-    vc: wavelink.Player = interaction.guild.voice_client
+    vc: mafic.Player = interaction.guild.voice_client
     if vc and vc.connected:
         async with vc_connection_lock:
             misoyan_settings["need_reconnection"] = False
@@ -479,7 +466,7 @@ async def leave(interaction: discord.Interaction):
         await interaction.response.send_message("you want me to leave...? im not connected to a vc", ephemeral=True)
 
 class NowPlayingView(ui.LayoutView):
-    def __init__(self, track: wavelink.Playable, user, extra: str = "", override_cover: str = None):
+    def __init__(self, track: mafic.Track, user, extra: str = "", override_cover: str = None):
         super().__init__()
 
         user_handle = f"@{user.name}"
@@ -488,10 +475,12 @@ class NowPlayingView(ui.LayoutView):
             track_cover_url = override_cover
         elif hasattr(track, 'artwork') and track.artwork:
             track_cover_url = track.artwork
+        elif hasattr(track, 'artwork_url') and track.artwork_url:
+            track_cover_url = track.artwork_url
         else:
             track_cover_url = "https://placehold.co/240x240/eaeaea/969696.png?text=No+Cover"
 
-        if track.length:
+        if getattr(track, 'length', None):
             minutes = int((track.length // 1000) // 60)
             seconds = int((track.length // 1000) % 60)
             duration = f"{minutes}:{seconds:02d}"
@@ -499,12 +488,12 @@ class NowPlayingView(ui.LayoutView):
             duration = "--:--"
 
         track_title = track.title
-        if (not track_title or track_title == "Unknown Title") and track.uri and "discordapp.com" in track.uri:
+        if (not track_title or track_title == "Unknown Title") and hasattr(track, 'uri') and track.uri and "discordapp.com" in track.uri:
             track_title = track.uri.split("/")[-1].split("?")[0]
 
-        artist_name = track.author if (track.author and track.author != "Unknown Artist") else "local asset"
+        artist_name = track.author if (hasattr(track, 'author') and track.author and track.author != "Unknown Artist") else "local asset"
 
-        display_prefix = " (file)" if (track.uri and "discordapp.com" in track.uri) else extra
+        display_prefix = " (file)" if (hasattr(track, 'uri') and track.uri and "discordapp.com" in track.uri) else extra
         now_playing = ui.TextDisplay(f"-# now playing!{display_prefix} - requested by {user_handle} :3")
         cover_art = ui.MediaGallery(discord.MediaGalleryItem(track_cover_url))
         track_metadata = ui.TextDisplay(f"## {track_title}\nArtist: **{artist_name}**\nDuration: {duration}")
@@ -518,12 +507,12 @@ class NowPlayingView(ui.LayoutView):
         self.add_item(container)
 
 class FilePlayingView(ui.LayoutView):
-    def __init__(self, track: wavelink.Playable, user: discord.User, attachment: discord.Attachment, guild: discord.Guild = None, has_cover: bool = False):
+    def __init__(self, track: mafic.Track, user: discord.User, attachment: discord.Attachment, guild: discord.Guild = None, has_cover: bool = False):
         super().__init__()
 
         user_handle = f"@{user.name}"
 
-        if track.length and track.length > 0:
+        if getattr(track, 'length', None) and track.length > 0:
             minutes = int((track.length // 1000) // 60)
             seconds = int((track.length // 1000) % 60)
             duration_text = f"{minutes}:{seconds:02d}"
@@ -538,6 +527,8 @@ class FilePlayingView(ui.LayoutView):
             display_thumbnail = f"{render_url}/cache/{guild_id}_cover.png" if render_url else user.display_avatar.url
         elif hasattr(track, 'artwork') and track.artwork:
             display_thumbnail = track.artwork
+        elif hasattr(track, 'artwork_url') and track.artwork_url:
+            display_thumbnail = track.artwork_url
         else:
             display_thumbnail = user.display_avatar.url
 
@@ -546,8 +537,8 @@ class FilePlayingView(ui.LayoutView):
             accessory=ui.Thumbnail(display_thumbnail)
         )
 
-        has_title = track.title and not track.title.startswith("http") and track.title != attachment.filename
-        has_author = track.author and track.author != "Unknown Artist" and track.author != ""
+        has_title = getattr(track, 'title', None) and not track.title.startswith("http") and track.title != attachment.filename
+        has_author = getattr(track, 'author', None) and track.author != "Unknown Artist" and track.author != ""
 
         layout_components = [top_section]
 
@@ -566,17 +557,19 @@ class FilePlayingView(ui.LayoutView):
         self.add_item(container)
 
 class QueuePopup(ui.LayoutView):
-    def __init__(self, track: wavelink.Playable, user, queue_message, position: int = None):
+    def __init__(self, track: mafic.Track, user, queue_message, position: int = None):
         super().__init__()
 
         user_handle = f"@{user.name}"
 
         if hasattr(track, 'artwork') and track.artwork:
             track_cover_url = track.artwork
+        elif hasattr(track, 'artwork_url') and track.artwork_url:
+            track_cover_url = track.artwork_url
         else:
             track_cover_url = "https://placehold.co/240x240/eaeaea/969696.png?text=No+Cover"
 
-        if track.length:
+        if getattr(track, 'length', None):
             minutes = int((track.length // 1000) // 60)
             seconds = int((track.length // 1000) % 60)
             duration = f"{minutes}:{seconds:02d}"
@@ -586,7 +579,7 @@ class QueuePopup(ui.LayoutView):
         index = ""
         if position:
             index = f"Position: #{position}"
-        artist_name = track.author or "unknown"
+        artist_name = getattr(track, 'author', "unknown") or "unknown"
         text_metadata = f"-# requested by {user_handle} :3\n{queue_message}\n# {track.title}\nArtist: **{artist_name}**\nDuration: {duration}\n{index}"
 
         section = ui.Section(ui.TextDisplay(text_metadata), accessory=ui.Thumbnail(track_cover_url))
@@ -621,26 +614,29 @@ async def play(interaction: discord.Interaction, search: str, timing: str = "que
     await interaction.response.defer()
 
     try:
-        vc: wavelink.Player = interaction.guild.voice_client
+        vc: mafic.Player = interaction.guild.voice_client
         if not vc or not vc.connected:
             async with vc_connection_lock:
                 misoyan_settings["is_connecting"] = True
                 print(f"[/play] connecting to vc: {user_channel.name}")
-                vc = await user_channel.connect(cls=wavelink.Player, self_deaf=True)
+                vc = await user_channel.connect(cls=mafic.Player, self_deaf=True)
                 global target_voice_channel_id
                 target_voice_channel_id = user_channel.id
                 misoyan_settings["need_reconnection"] = False
                 await asyncio.sleep(1.5)
 
+        if not hasattr(vc, "queue"):
+            vc.queue = []
+
         print(f"wait, im searching for '{search}' rn gimme a sec")
-        tracks = await wavelink.Playable.search(search)
+        tracks = await vc.fetch_tracks(search)
         
         if not tracks:
             await interaction.followup.send("i couldn't find anything with that search query :c", ephemeral=True)
             return
 
-        if isinstance(tracks, wavelink.Playlist):
-            playlist: wavelink.Playlist = tracks
+        if isinstance(tracks, mafic.Playlist):
+            playlist: mafic.Playlist = tracks
             playlist_tracks = playlist.tracks
 
             if not playlist_tracks:
@@ -648,7 +644,7 @@ async def play(interaction: discord.Interaction, search: str, timing: str = "que
                 return
 
             start_index = 0
-            if not vc.playing and not vc.paused:
+            if not vc.current:
                 first_track = playlist_tracks[0]
                 await vc.play(first_track)
                 embed = NowPlayingView(first_track, interaction.user, f" (playlist: {playlist.name})") 
@@ -657,48 +653,48 @@ async def play(interaction: discord.Interaction, search: str, timing: str = "que
 
             if timing == "replace":
                 for track in reversed(playlist_tracks[start_index:]):
-                    vc.queue.put_at(0, track)
+                    vc.queue.insert(0, track)
                 if start_index == 0:  
-                    await vc.skip()
+                    await vc.stop()
                     embed = NowPlayingView(playlist_tracks[0], interaction.user, " (replaced with playlist)")
                     await interaction.followup.send(view=embed)
 
             elif timing == "next":
                 for track in reversed(playlist_tracks[start_index:]):
-                    vc.queue.put_at(0, track)
+                    vc.queue.insert(0, track)
                 if start_index == 0:
                     embed = QueuePopup(playlist_tracks[0], interaction.user, f"queued playlist '{playlist.name}' next!")
                     await interaction.followup.send(view=embed)
 
             else:
                 for track in playlist_tracks[start_index:]:
-                    vc.queue.put(track)
+                    vc.queue.append(track)
                 if start_index == 0:
                     embed = QueuePopup(playlist_tracks[0], interaction.user, f"added playlist '{playlist.name}' to queue!", len(vc.queue))
                     await interaction.followup.send(view=embed)
             return
 
-        track: wavelink.Playable = tracks[0]
+        track: mafic.Track = tracks[0]
         
-        if not vc.playing and not vc.paused:
+        if not vc.current:
             await vc.play(track)
             embed = NowPlayingView(track, interaction.user) 
             await interaction.followup.send(view=embed)
             return
 
         if timing == "replace":
-            vc.queue.put_at(0, track)
-            await vc.skip()
+            vc.queue.insert(0, track)
+            await vc.stop()
             embed = NowPlayingView(track, interaction.user, " (replaced)")
             await interaction.followup.send(view=embed)
 
         elif timing == "next":
-            vc.queue.put_at(0, track)
+            vc.queue.insert(0, track)
             embed = QueuePopup(track, interaction.user, "playing next!")
             await interaction.followup.send(view=embed)
 
         else:
-            vc.queue.put(track)
+            vc.queue.append(track)
             embed = QueuePopup(track, interaction.user, "added to queue!", len(vc.queue))
             await interaction.followup.send(view=embed)
 
@@ -718,7 +714,7 @@ async def now_playing(interaction: discord.Interaction):
         await interaction.response.send_message("hey, don't touch that.", ephemeral=True)
         return
 
-    vc: wavelink.Player = interaction.guild.voice_client
+    vc: mafic.Player = interaction.guild.voice_client
     if not vc or not vc.connected or not vc.current:
         await interaction.response.send_message("nothing is playing right now!", ephemeral=True)
         return
@@ -727,7 +723,7 @@ async def now_playing(interaction: discord.Interaction):
     cover_url_override = None
 
     local_image_file = f"cache/{interaction.guild.id}_cover.png"
-    if track.uri and "discordapp.com/attachments/" in track.uri and os.path.exists(local_image_file):
+    if hasattr(track, "uri") and track.uri and "discordapp.com/attachments/" in track.uri and os.path.exists(local_image_file):
         render_url = os.environ.get("RENDER_EXTERNAL_URL")
         if render_url:
             render_url = render_url.rstrip("/")
@@ -746,12 +742,12 @@ async def playback(interaction: discord.Interaction):
         await interaction.response.send_message("hey, don't touch that.", ephemeral=True)
         return
 
-    vc: wavelink.Player = interaction.guild.voice_client
+    vc: mafic.Player = interaction.guild.voice_client
     if not vc or not vc.connected:
         await interaction.response.send_message("i'm not even in a vc right now?", ephemeral=True)
         return
 
-    if vc.playing and not vc.paused:
+    if vc.current and not vc.paused:
         await vc.pause(True)
         await interaction.response.send_message("oh, ok i'll hold the music.")
     elif vc.paused:
@@ -770,39 +766,42 @@ async def skip(interaction: discord.Interaction):
         await interaction.response.send_message("hey, don't touch that.", ephemeral=True)
         return
 
-    vc: wavelink.Player = interaction.guild.voice_client
+    vc: mafic.Player = interaction.guild.voice_client
     if not vc or not vc.connected:
         await interaction.response.send_message("i'm not even in a vc to skip anything?", ephemeral=True)
         return
 
-    if not vc.playing and not vc.paused:
+    if not vc.current:
         await interaction.response.send_message("there's nothing playing right now anyway!", ephemeral=True)
         return
 
-    await vc.skip()
+    await vc.stop()
     await interaction.response.send_message("track skipped! next track coming up...")
 
 @bot.tree.command(name="previous", description="play the previous song if you like it :3")
 async def previous_track(interaction: discord.Interaction):
-    vc: wavelink.Player = interaction.guild.voice_client
+    vc: mafic.Player = interaction.guild.voice_client
     if not vc or not vc.connected:
         await interaction.response.send_message("i'm not in a vc!", ephemeral=True)
         return
 
-    if not vc.queue.history:
+    history = getattr(vc, "history", [])
+    if not history:
         await interaction.response.send_message("hmph, you think i can play nothing?", ephemeral=True)
         return
 
-    real_previous = vc.queue.history.pop()
+    real_previous = history.pop()
+    if not hasattr(vc, "queue"):
+        vc.queue = []
     if vc.current:
-        vc.queue.put_at_front(vc.current)
+        vc.queue.insert(0, vc.current)
         
     await vc.play(real_previous)
     await interaction.response.send_message(f"rewinding back to: **{real_previous.title}**")
 
 @bot.tree.command(name="replay", description="restart the current song from the beginning")
 async def replay_track(interaction: discord.Interaction):
-    vc: wavelink.Player = interaction.guild.voice_client
+    vc: mafic.Player = interaction.guild.voice_client
     
     if not vc or not vc.connected or not vc.current:
         await interaction.response.send_message("tsk, seriously?")
@@ -813,43 +812,44 @@ async def replay_track(interaction: discord.Interaction):
     await interaction.response.send_message(f"replaying **{track.title}**")
 
 class SongQueue(ui.LayoutView):
-    def __init__(self, vc: wavelink.Player, user):
+    def __init__(self, vc: mafic.Player, user):
         super().__init__()
 
         queue_sections = []
 
         if vc.current:
             current_track = vc.current
-            current_cover = current_track.artwork if current_track.artwork else "https://placehold.co/240x240/eaeaea/969696.png?text=No+Cover"
+            current_cover = getattr(current_track, 'artwork', None) or getattr(current_track, 'artwork_url', None) or "https://placehold.co/240x240/eaeaea/969696.png?text=No+Cover"
 
-            if current_track.length:
+            if getattr(current_track, 'length', None):
                 curr_min = int((current_track.length // 1000) // 60)
                 curr_sec = int((current_track.length // 1000) % 60)
                 curr_duration = f"{curr_min}:{curr_sec:02d}"
             else:
                 curr_duration = "97:663? (unknown)"
 
-            current_text = f"## {current_track.title}\nArtist: **{current_track.author or 'unknown'}**\nDuration: {curr_duration}\nPosition: playing!"
+            current_text = f"## {current_track.title}\nArtist: **{getattr(current_track, 'author', 'unknown') or 'unknown'}**\nDuration: {curr_duration}\nPosition: playing!"
             
             queue_sections.append(
                 ui.Section(ui.TextDisplay(current_text), accessory=ui.Thumbnail(current_cover))
             )
 
-        for i, track in enumerate(vc.queue):
+        queue = getattr(vc, "queue", [])
+        for i, track in enumerate(queue):
             if i >= 4:
                 break
                 
             position_text = "up next!" if i == 0 else f"#{i + 1}"
-            track_cover = track.artwork if track.artwork else "https://placehold.co/240x240/eaeaea/969696.png?text=240+x+240"
+            track_cover = getattr(track, 'artwork', None) or getattr(track, 'artwork_url', None) or "https://placehold.co/240x240/eaeaea/969696.png?text=240+x+240"
 
-            if track.length:
+            if getattr(track, 'length', None):
                 t_min = int((track.length // 1000) // 60)
                 t_sec = int((track.length // 1000) % 60)
                 track_duration = f"{t_min}:{t_sec:02d}"
             else:
                 track_duration = "97:663? (unknown)"
 
-            track_text = f"## {track.title}\nArtist: **{track.author or 'unknown'}**\nDuration: {track_duration}\nPosition: {position_text}"
+            track_text = f"## {track.title}\nArtist: **{getattr(track, 'author', 'unknown') or 'unknown'}**\nDuration: {track_duration}\nPosition: {position_text}"
             
             queue_sections.append(
                 ui.Section(ui.TextDisplay(track_text), accessory=ui.Thumbnail(track_cover))
@@ -860,9 +860,10 @@ class SongQueue(ui.LayoutView):
 
 @bot.tree.command(name="queue", description="see what songs are lined up next")
 async def view_queue(interaction: discord.Interaction):
-    vc: wavelink.Player = interaction.guild.voice_client
+    vc: mafic.Player = interaction.guild.voice_client
 
-    if not vc or not vc.connected or (not vc.current and len(vc.queue) == 0):
+    queue = getattr(vc, "queue", []) if vc else []
+    if not vc or not vc.connected or (not vc.current and len(queue) == 0):
         await interaction.response.send_message("the queue is completely empty!", ephemeral=True)
         return
 
@@ -901,15 +902,18 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
     await interaction.response.defer()
 
     try:
-        vc: wavelink.Player = interaction.guild.voice_client
+        vc: mafic.Player = interaction.guild.voice_client
         if not vc or not vc.connected:
             misoyan_settings["is_connecting"] = True
             print(f"[play-file] connecting to vc: {user_channel.name}")
-            vc = await user_channel.connect(cls=wavelink.Player, self_deaf=True)
+            vc = await user_channel.connect(cls=mafic.Player, self_deaf=True)
             global target_voice_channel_id
             target_voice_channel_id = user_channel.id
             misoyan_settings["need_reconnection"] = False
             await asyncio.sleep(1.5)
+
+        if not hasattr(vc, "queue"):
+            vc.queue = []
 
         # --- metadata extraction block ---
         has_extracted_cover = False
@@ -929,32 +933,32 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
             except Exception as metadata_error:
                 print(f"[!] couldn't rip metadata tags from track: {metadata_error}")
 
-        tracks = await wavelink.Playable.search(attachment.url)
+        tracks = await vc.fetch_tracks(attachment.url)
         if not tracks:
             await interaction.followup.send("i failed to decode your file stream natively :c", ephemeral=True)
             return
             
         track = tracks[0]
 
-        if not vc.playing and not vc.paused:
+        if not vc.current:
             await vc.play(track)
             view_embed = FilePlayingView(track, interaction.user, attachment, guild=interaction.guild, has_cover=has_extracted_cover) 
             await interaction.followup.send(view=view_embed)
             return
 
         if timing == "replace":
-            vc.queue.put_at(0, track)
-            await vc.skip()
+            vc.queue.insert(0, track)
+            await vc.stop()
             view_embed = FilePlayingView(track, interaction.user, attachment, guild=interaction.guild, has_cover=has_extracted_cover)
             await interaction.followup.send(view=view_embed)
 
         elif timing == "next":
-            vc.queue.put_at(0, track)
+            vc.queue.insert(0, track)
             embed = QueuePopup(track, interaction.user, "playing next (file)!")
             await interaction.followup.send(view=embed)
 
         else:
-            vc.queue.put(track)
+            vc.queue.append(track)
             embed = QueuePopup(track, interaction.user, "added file to queue!", len(vc.queue))
             await interaction.followup.send(view=embed)
 
@@ -971,8 +975,8 @@ class LoopStatusView(ui.LayoutView):
         user_handle = f"@{user.name}"
         
         if mode == "current":
-            if track and hasattr(track, 'artwork') and track.artwork:
-                thumbnail_url = track.artwork
+            if track and (getattr(track, 'artwork', None) or getattr(track, 'artwork_url', None)):
+                thumbnail_url = getattr(track, 'artwork', None) or getattr(track, 'artwork_url', None)
             else:
                 thumbnail_url = "https://placehold.co/240x240/eaeaea/969696.png?text=No+Cover"
             
@@ -1005,18 +1009,13 @@ class LoopStatusView(ui.LayoutView):
     app_commands.Choice(name="off", value="off")
 ])
 async def loop_cmd(interaction: discord.Interaction, mode: app_commands.Choice[str]):
-    vc: wavelink.Player = interaction.guild.voice_client
+    vc: mafic.Player = interaction.guild.voice_client
 
     if not vc:
         await interaction.response.send_message("there's no active player running in this server!", ephemeral=True)
         return
 
-    if mode.value == "current":
-        vc.queue.mode = wavelink.QueueMode.loop
-    elif mode.value == "queue":
-        vc.queue.mode = wavelink.QueueMode.loop_all
-    else: 
-        vc.queue.mode = wavelink.QueueMode.normal
+    vc.loop = mode.value
 
     view_embed = LoopStatusView(mode.value, vc.current, interaction.user)
     await interaction.response.send_message(view=view_embed)
@@ -1026,7 +1025,7 @@ async def systemstatus(interaction: discord.Interaction):
     total_guilds = len(bot.guilds)
     latency = round(bot.latency * 1000)
     
-    vc: wavelink.Player = interaction.guild.voice_client
+    vc: mafic.Player = interaction.guild.voice_client
     current_vc_connections = 1 if vc and vc.connected else 0
     bot_thumbnail = bot.user.display_avatar.url
     
