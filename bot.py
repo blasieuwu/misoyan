@@ -312,17 +312,17 @@ async def on_ready():
     
     try:
         synced = await bot.tree.sync()
-        print(f"\x1b[1;38;2;88;101;242m[discord - commands]\x1b[0m  {len(synced)}")
+        print(f"\x1b[1;48;2;88;101;242m[discord - commands]\x1b[0m {len(synced)} commands were syncronized.")
     except Exception as e:
-        print(f"\x1b[1;38;2;88;101;242m[discord - vc]\x1b[0m failed to sync commands: \x1b[1;4;31m{e}\x1b[0m")
+        print(f"\x1b[1;48;2;88;101;242m[discord - vc]\x1b[0m failed to sync commands: \x1b[1;4;31m{e}\x1b[0m")
         
     if not cycle_status_loop.is_running():
         cycle_status_loop.start()
-        print("\x1b[1;38;2;88;101;242m[discord - custom status]\x1b[0m starting custom status rotation...")
+        print("\x1b[1;48;2;88;101;242m[discord - custom status]\x1b[0m starting custom status rotation...")
         
     if not native_voice_sentinel_loop.is_running():
         native_voice_sentinel_loop.start()
-        print("\x1b[1;38;2;88;101;242m[discord - vc]\x1b[0m starting auto-reconnect process...")
+        print("\x1b[1;48;2;88;101;242m[discord - vc]\x1b[0m starting auto-reconnect process...")
 
 @bot.event
 async def on_wavelink_track_end(payload: wavelink.TrackEndEventPayload):
