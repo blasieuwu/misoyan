@@ -218,14 +218,16 @@ class FullSystemControlPanel(discord.ui.View):
         await interaction.response.edit_message(embed=self.generate_dashboard_embed(), view=self)
 
 async def connect_nodes():
-    """sets up the connection with our external lavalink server node"""
     await bot.wait_until_ready()
     
-    # if nodes are already connected from a previous attempt, clear them out
+    # clear old pool connections if present
     if wavelink.Pool.nodes:
         for node in list(wavelink.Pool.nodes.values()):
-            await node.close()
-    
+            try:
+                await node.close()
+            except Exception:
+                pass
+
     protocol = "https" if LAVALINK_SECURE else "http"
     uri = f"{protocol}://{LAVALINK_HOST}:{LAVALINK_PORT}"
     
