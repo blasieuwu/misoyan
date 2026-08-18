@@ -1,6 +1,6 @@
 discord.py
 PyNaCl
 davey
-pomice
+lava-lyra
 yt-dlp[default]
 mutagen
