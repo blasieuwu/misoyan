@@ -223,11 +223,14 @@ class FullSystemControlPanel(discord.ui.View):
 async def connect_nodes():
     await bot.wait_until_ready()
     
+    # prepend scheme if using port 443 so aiohttp enables ssl
+    host_url = f"https://{LAVALINK_HOST}" if LAVALINK_PORT == 443 else LAVALINK_HOST
+
     try:
         await lava_lyra.NodePool.create_node(
             bot=bot,
-            host=LAVALINK_HOST,  # just "lava.link" (no "https://")
-            port=LAVALINK_PORT,  # integer like 80 or 443
+            host=host_url,
+            port=LAVALINK_PORT,
             identifier="misoyan",
             password=LAVALINK_PASS,
             fallback=False
