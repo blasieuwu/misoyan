@@ -21,7 +21,7 @@ logging.getLogger("wavelink").setLevel(logging.DEBUG)
 
 # handle sigterm gracefully when render stops/restarts the container
 def handle_sigterm(*args):
-    print("received sigterm from render, shutting down gracefully...")
+    print("\x1b[1;33m[!] instance has recieved a \x1b[1mSIGTERM\x1b[0m and will now shut down...\x1b[0m")
     sys.exit(0)
 
 signal.signal(signal.SIGTERM, handle_sigterm)
@@ -138,7 +138,7 @@ async def start_web_server():
     port = int(render_port) if render_port else 8080
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
-    print(f"hosting my little keepalive heart on port {port} :o")
+    print(f"\x1b[1m[https] web server has started on port {port}\x1b[0m")
 
 class FullSystemControlPanel(discord.ui.View):
     def __init__(self):
@@ -235,10 +235,10 @@ async def connect_nodes():
     ]
 
     try:
+        print("\x1b[1;38;2;255;127;0m[lavalink] attempting to connect to the nodes...\x1b[0m")
         await wavelink.Pool.connect(nodes=nodes, client=bot)
-        print("[lavalink] successfully built a connection with our node pool!")
     except Exception as e:
-        print(f"[lavalink] fail to build node pipeline: {e}")
+        print(f"\x1b[1;38;2;255;127;0m[lavalink]\x1b[0m \x1b[31mfail to build node pipeline: \x1b[1;4;31m{e}\x1b[0m")
         
 @tasks.loop(seconds=15)
 async def native_voice_sentinel_loop():
@@ -262,7 +262,7 @@ async def native_voice_sentinel_loop():
             # reset flag BEFORE connecting to break the trigger loop
             misoyan_settings["need_reconnection"] = False
             misoyan_settings["is_connecting"] = True
-            print("wait im reconnecting pls wait for me")
+            print("\x1b[1;38;2;88;101;242;m[discord - vc]\x1b[0m a disconnection has occured & will attempt to reconnect.")
             
             try:
                 if home_channel.guild.voice_client:
@@ -273,10 +273,10 @@ async def native_voice_sentinel_loop():
                         pass
 
                 await home_channel.connect(cls=wavelink.Player, timeout=15.0, self_deaf=True)
-                print("im back :3")
+                print("\x1b[1;38;2;88;101;242m[discord - vc]\x1b[0m connection restablished")
                 
             except Exception as e:
-                print(f"so uhh, my wifi broke: {e}")
+                print(f"\x1b[1;38;2;88;101;242m[discord - vc]\x1b[0m \x1b[31man error occured while reconnecting: \x1b[1;4;31m{e}\x1b[0m")
                 # cool down to prevent rapid reconnection loops
                 await asyncio.sleep(10.0)
             finally:
@@ -298,11 +298,11 @@ async def cycle_status_loop():
     try:
         await bot.change_presence(status=selected_status, activity=selected_note)
     except Exception as e:
-        print(f"yeah i couldnt change my discord status: {e}")
+        print(f"\x1b[1;38;2;88;101;242m[discord - custom status]\x1b[0m an error occured: \x1b[1;4;31m{e}\x1b[0m")
 
 @bot.event
 async def on_ready():
-    print(f"ah, time to go on discord | {bot.user.name}")
+    print(f"\x1b[1;38;2;88;101;242m[discord - sign-in]\x1b[0m signing in as \x1b[1m{bot.user.name}\x1b[0m")
     
     # start the integrated keepalive web server
     await start_web_server()
@@ -312,17 +312,17 @@ async def on_ready():
     
     try:
         synced = await bot.tree.sync()
-        print(f"i got {len(synced)} commands ready :o")
+        print(f"\x1b[1;38;2;88;101;242m[discord - commands]\x1b[0m  {len(synced)}")
     except Exception as e:
-        print(f"wait where did my commands go- | {e}")
+        print(f"\x1b[1;38;2;88;101;242m[discord - vc]\x1b[0m failed to sync commands: \x1b[1;4;31m{e}\x1b[0m")
         
     if not cycle_status_loop.is_running():
         cycle_status_loop.start()
-        print("time to pick a status i guess.")
+        print("\x1b[1;38;2;88;101;242m[discord - custom status]\x1b[0m starting custom status rotation...")
         
     if not native_voice_sentinel_loop.is_running():
         native_voice_sentinel_loop.start()
-        print("time to set up my speakers for music")
+        print("\x1b[1;38;2;88;101;242m[discord - vc]\x1b[0m starting auto-reconnect process...")
 
 @bot.event
 async def on_wavelink_track_end(payload: wavelink.TrackEndEventPayload):
@@ -334,9 +334,14 @@ async def on_wavelink_track_end(payload: wavelink.TrackEndEventPayload):
     if not player.queue.is_empty:
         next_track = player.queue.get()
         await player.play(next_track)
-        print(f"[queue] automatically transitioning to: {next_track.title}")
+        print(f"\x1b[1;38;2;29;185;84m[music - queue]\x1b[0m playing next: \x1b[1m{next_track.title}\x1b[0m")
     else:
-        print("[queue] queue is now empty, going silent.")
+        print("\x1b[1;38;2;29;185;84m[music - queue]\x1b[0m queue is empty.")
+
+@bot.event
+async def on_wavelink_node_ready(payload: wavelink.NodeReadyEventPayload) -> None:
+    node = payload.node
+    print(f"\x1b[1;32m[lavalink] node '{node.identifier}' is ready!\x1b[0m")
 
 @bot.event
 async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
@@ -345,7 +350,7 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
 
     # only trigger if the bot was actually disconnected from the target channel
     if before.channel and before.channel.id == target_voice_channel_id and (after.channel is None or after.channel.id != target_voice_channel_id):
-        print("wait im not in my vc anymore give me a sec")
+        print("\x1b[1;38;2;88;101;242;m[discord - vc]\x1b[0m a disconnection has occured & will attempt to reconnect.")
         
         if misoyan_settings["all_features"] and misoyan_settings["vc_joining"]:
             if not misoyan_settings["is_connecting"] and not vc_connection_lock.locked():
@@ -368,7 +373,7 @@ async def on_message(message: discord.Message):
         except discord.Forbidden:
             pass
         except Exception as e:
-            print(f"failed to restore nickname: {e}")
+            print(f"\x1b[1;38;2;88;101;242;m[discord - afk/nicknames]\x1b[0m an error occured while removing [AFK] from a person's nickname: \x1b[1;4;31m{e}\x1b[0m")
 
         await message.channel.send(f"welcome back, {message.author.mention}. you're no longer afk.")
     
@@ -388,7 +393,7 @@ async def on_message(message: discord.Message):
             selected_reply = random.choice(reply_list)
             await message.reply(selected_reply, allowed_mentions=discord.AllowedMentions.none())
         except Exception as e:
-            print(f"my chat broke: {e}")
+            print(f"\x1b[1;38;2;88;101;242;m[discord - chat]\x1b[0m failed to send message: \x1b[1;4;31m{e}\x1b[0m")
 
 # slash commands
 @bot.tree.command(name="afk", description="tell people you're busy")
@@ -413,7 +418,7 @@ async def afk(interaction: discord.Interaction, reason: str = "busy :3"):
         # bot lacks 'manage_nicknames' permission or user is server owner / higher role
         pass
     except Exception as e:
-        print(f"failed to change nickname: {e}")
+        print(f"\x1b[1;38;2;88;101;242;m[discord - afk/nicknames]\x1b[0m an error occured while adding [AFK] to a person's nickname: \x1b[1;4;31m{e}\x1b[0m")
 
     await interaction.response.send_message(f"ok, you're afk with reason: '*{reason}*'", ephemeral=True)
     
@@ -444,12 +449,12 @@ async def join(interaction: discord.Interaction):
     async with vc_connection_lock:
         try:
             misoyan_settings["is_connecting"] = True
-            print(f"connecting to vc: {user_channel.name}")
+            print(f"\x1b[1;38;2;88;101;242;m[discord - vc | /join]\x1b[0m attempting vc connection to channel '{user_channel.name}'")
             await user_channel.connect(cls=wavelink.Player, self_deaf=True)
             misoyan_settings["need_reconnection"] = False
             await interaction.followup.send("im in your vc now :D")
         except Exception as e:
-            print(f"shit i failed to join: {e}")
+            print(f"\x1b[1;38;2;88;101;242;m[discord - vc | /join]\x1b[0m an exception occured while connecting: {e}")
             await interaction.followup.send(f"so i may have failed to connect...: {e}", ephemeral=True)
         finally:
             misoyan_settings["is_connecting"] = False
@@ -622,14 +627,14 @@ async def play(interaction: discord.Interaction, search: str, timing: str = "que
         if not vc or not vc.is_connected:
             async with vc_connection_lock:
                 misoyan_settings["is_connecting"] = True
-                print(f"[/play] connecting to vc: {user_channel.name}")
+                print(f"\x1b[1;38;2;88;101;242;m[discord - vc | /play]\x1b[0m attempting connection to channel '{user_channel.name}'")
                 vc = await user_channel.connect(cls=wavelink.Player, self_deaf=True)
                 global target_voice_channel_id
                 target_voice_channel_id = user_channel.id
                 misoyan_settings["need_reconnection"] = False
                 await asyncio.sleep(1.5)
 
-        print(f"wait, im searching for '{search}' rn gimme a sec")
+        print(f"\x1b[1;38;2;255;127;0m[lavalink]\x1b[0m attempting to search for query: '{search}'")
         results = await wavelink.Playable.search(search)
         
         if not results:
@@ -647,6 +652,7 @@ async def play(interaction: discord.Interaction, search: str, timing: str = "que
             start_index = 0
             if not vc.current:
                 first_track = playlist_tracks[0]
+                print(f"\x1b[1;38;2;29;185;84m[music - playlist | /play]\x1b[0m playing song #1 of playlist '{playlist.name}'")
                 await vc.play(first_track)
                 embed = NowPlayingView(first_track, interaction.user, f" (playlist: {playlist.name})") 
                 await interaction.followup.send(view=embed)
@@ -678,6 +684,7 @@ async def play(interaction: discord.Interaction, search: str, timing: str = "que
         track: wavelink.Playable = results[0]
         
         if not vc.current:
+            print(f"\x1b[1;38;2;29;185;84m[music | /play]\x1b[0m now playing '{track.title}'")
             await vc.play(track)
             embed = NowPlayingView(track, interaction.user) 
             await interaction.followup.send(view=embed)
@@ -685,22 +692,25 @@ async def play(interaction: discord.Interaction, search: str, timing: str = "que
 
         if timing == "replace":
             vc.queue.put_at(0, track)
+            print(f"\x1b[1;38;2;29;185;84m[music | /play]\x1b[0m now playing '{track.title}' (replaced)")
             await vc.skip()
             embed = NowPlayingView(track, interaction.user, " (replaced)")
             await interaction.followup.send(view=embed)
 
         elif timing == "next":
             vc.queue.put_at(0, track)
+            print(f"\x1b[1;38;2;29;185;84m[music | /play]\x1b[0m put '{track.title}' at the front of the queue.")
             embed = QueuePopup(track, interaction.user, "playing next!")
             await interaction.followup.send(view=embed)
 
         else:
             vc.queue.put(track)
+            print(f"\x1b[1;38;2;29;185;84m[music | /play]\x1b[0m '{track.title}' was added to the queue.")
             embed = QueuePopup(track, interaction.user, "added to queue!", vc.queue.count)
             await interaction.followup.send(view=embed)
 
     except Exception as e:
-        print(f"[!] my speakers nooo- | {e}")
+        print(f"\x1b[1;38;2;255;127;0m[lavalink]\x1b[0m \x1b[1;38;2;88;101;242;m[discord - vc | /play]\x1b[0m an exception occurred with vc/lavalink: \x1b[1;4;31m{e}\x1b[0m")
         await interaction.followup.send(f"so my speakers... uhh: `{e}`", ephemeral=True)
     finally:
         misoyan_settings["is_connecting"] = False
@@ -904,7 +914,7 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
         vc: wavelink.Player = interaction.guild.voice_client
         if not vc or not vc.is_connected:
             misoyan_settings["is_connecting"] = True
-            print(f"[play-file] connecting to vc: {user_channel.name}")
+            print(f"\x1b[1;38;2;88;101;242;m[discord - vc | /play-file]\x1b[0m attempting connection to channel '{user_channel.name}'")
             vc = await user_channel.connect(cls=wavelink.Player, self_deaf=True)
             global target_voice_channel_id
             target_voice_channel_id = user_channel.id
@@ -927,7 +937,7 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
                         has_extracted_cover = True
                         break
             except Exception as metadata_error:
-                print(f"[!] couldn't rip metadata tags from track: {metadata_error}")
+                print(f"\x1b[1;38;2;29;185;84m[/play-file]\x1b[0m an error occured during extration of metadata tags: \x1b[1;4;31m{e}\x1b[0m")
 
         results = await wavelink.Playable.search(attachment.url)
         if not results:
@@ -938,6 +948,7 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
 
         if not vc.current:
             await vc.play(track)
+            print(f"\x1b[1;38;2;29;185;84m[music | /play]\x1b[0m now playing '{track.title}'")
             view_embed = FilePlayingView(track, interaction.user, attachment, guild=interaction.guild, has_cover=has_extracted_cover) 
             await interaction.followup.send(view=view_embed)
             return
@@ -945,21 +956,24 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
         if timing == "replace":
             vc.queue.put_at(0, track)
             await vc.skip()
+            print(f"\x1b[1;38;2;29;185;84m[music | /play]\x1b[0m now playing '{track.title}' (replaced)")
             view_embed = FilePlayingView(track, interaction.user, attachment, guild=interaction.guild, has_cover=has_extracted_cover)
             await interaction.followup.send(view=embed)
 
         elif timing == "next":
             vc.queue.put_at(0, track)
+            print(f"\x1b[1;38;2;29;185;84m[music | /play-file]\x1b[0m put '{track.title}' at the front of the queue.")
             embed = QueuePopup(track, interaction.user, "playing next (file)!")
             await interaction.followup.send(view=embed)
 
         else:
             vc.queue.put(track)
+            print(f"\x1b[1;38;2;29;185;84m[music | /play-file]\x1b[0m '{track.title}' was added to the queue.")
             embed = QueuePopup(track, interaction.user, "added file to queue!", vc.queue.count)
             await interaction.followup.send(view=embed)
 
     except Exception as e:
-        print(f"[!] so my speakers broke...: {e}")
+        print(f"\x1b[1;38;2;255;127;0m[lavalink]\x1b[0m \x1b[1;38;2;88;101;242;m[discord - vc | /play-file]\x1b[0m an exception occurred with vc/lavalink: \x1b[1;4;31m{e}\x1b[0m")
         await interaction.followup.send(f"yeah my speaker broken lmaoo: `{e}`", ephemeral=True)
     finally:
         misoyan_settings["is_connecting"] = False
@@ -1013,9 +1027,12 @@ async def loop_cmd(interaction: discord.Interaction, mode: app_commands.Choice[s
 
     if mode.value == "current":
         vc.queue.mode = wavelink.QueueMode.loop
+        print(f"\x1b[1;38;2;29;185;84m[music - queue]\x1b[0m queue was set to loop the current song")
     elif mode.value == "queue":
         vc.queue.mode = wavelink.QueueMode.loop_all
+        print(f"\x1b[1;38;2;29;185;84m[music - queue]\x1b[0m queue was set to loop the whole queue list")
     else:
+        print(f"\x1b[1;38;2;29;185;84m[music - queue]\x1b[0m queue was set to not loop")
         vc.queue.mode = wavelink.QueueMode.normal
 
     view_embed = LoopStatusView(mode.value, vc.current, interaction.user)
@@ -1109,7 +1126,7 @@ async def systemsay(interaction: discord.Interaction, message: str):
     try:
         await interaction.channel.send(message)
     except Exception as e:
-        print(f"failed to execute /say: {e}")
+        print(f"\x1b[1;38;2;88;101;242;m[discord - chat]\x1b[0m failed to send message: \x1b[1;4;31m{e}\x1b[0m")
 
 @bot.tree.command(name="settings", description="[admin/owner] change my internal organs :3")
 async def control_panel(interaction: discord.Interaction):
@@ -1181,7 +1198,7 @@ async def create_webhook(interaction: discord.Interaction, message: str = "a web
 def handle_loop_exception(loop, context):
     """ensures unhandled async task exceptions trigger a full process exit code for render"""
     msg = context.get("exception", context.get("message"))
-    print(f"[CRITICAL] unhandled loop exception: {msg}")
+    print(f"\x1b[1m[python - async]\x1b[0m unhandled loop exception: \x1b[1;4;31m{msg}\x1b[0m")
     sys.exit(1)
 
 if __name__ == "__main__":
@@ -1192,4 +1209,4 @@ if __name__ == "__main__":
         loop.set_exception_handler(handle_loop_exception)
         bot.run(bot_token)
     else:
-        print("where is my token??")
+        print("\x1b[1;38;2;88;101;242;m[discord - sign-in]\x1b[0m \x1b[1;4;31;40mbot token wasn't found.\x1b[0m")
