@@ -454,7 +454,7 @@ async def join(interaction: discord.Interaction):
         try:
             misoyan_settings["is_connecting"] = True
             print(f"connecting to vc: {user_channel.name}")
-            await user_channel.connect(cls=wavelink.Player, self_deaf=True, inactive_timeout=None)
+            await user_channel.connect(cls=wavelink.Player, self_deaf=True)
             misoyan_settings["need_reconnection"] = False
             await interaction.followup.send("im in your vc now :D")
         except Exception as e:
@@ -626,7 +626,7 @@ async def play(interaction: discord.Interaction, search: str, timing: str = "que
             async with vc_connection_lock:
                 misoyan_settings["is_connecting"] = True
                 print(f"[/play] connecting to vc: {user_channel.name}")
-                vc = await user_channel.connect(cls=wavelink.Player, self_deaf=True, inactive_timeout=None)
+                vc = await user_channel.connect(cls=wavelink.Player, self_deaf=True)
                 global target_voice_channel_id
                 target_voice_channel_id = user_channel.id
                 misoyan_settings["need_reconnection"] = False
@@ -905,7 +905,7 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
         if not vc or not vc.connected:
             misoyan_settings["is_connecting"] = True
             print(f"[play-file] connecting to vc: {user_channel.name}")
-            vc = await user_channel.connect(cls=wavelink.Player, self_deaf=True, inactive_timeout=None)
+            vc = await user_channel.connect(cls=wavelink.Player, self_deaf=True)
             global target_voice_channel_id
             target_voice_channel_id = user_channel.id
             misoyan_settings["need_reconnection"] = False
