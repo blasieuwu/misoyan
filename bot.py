@@ -10,14 +10,14 @@ from aiohttp import web
 import discord
 from discord import app_commands, ui
 from discord.ext import commands, tasks
-import mafic  # powers her speakers
+import pomice  # powers her speakers
 from mutagen.mp3 import MP3 # for the file cover art embedding
 from mutagen.id3 import ID3
 import logging
 
 # logging
 logging.basicConfig(level=logging.INFO)
-logging.getLogger("mafic").setLevel(logging.DEBUG)
+logging.getLogger("pomice").setLevel(logging.DEBUG)
 
 # handle sigterm gracefully when render stops/restarts the container
 def handle_sigterm(*args):
@@ -37,7 +37,6 @@ creator_id = int(os.environ.get("CREATOR_ID", 0))
 class CustomBot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.pool = mafic.NodePool(self)
 
 # compiler needs this
 bot = CustomBot(
@@ -225,13 +224,13 @@ async def connect_nodes():
     await bot.wait_until_ready()
     
     try:
-        await bot.pool.create_node(
+        await pomice.NodePool.create_node(
+            bot=bot,
             host=LAVALINK_HOST,
             port=LAVALINK_PORT,
-            label="misoyan",
+            identifier="misoyan",
             password=LAVALINK_PASS,
-            secure=LAVALINK_SECURE,
-            version="4"
+            secure=LAVALINK_SECURE
         )
         print("[lavalink] successfully built a connection with our node pool!")
     except Exception as e:
@@ -251,8 +250,8 @@ async def native_voice_sentinel_loop():
     if not home_channel or not isinstance(home_channel, discord.VoiceChannel):
         return
 
-    vc: mafic.Player = home_channel.guild.voice_client
-    is_disconnected = not vc or not vc.connected
+    vc: pomice.Player = home_channel.guild.voice_client
+    is_disconnected = not vc or not vc.is_connected
 
     if is_disconnected or misoyan_settings["need_reconnection"]:
         async with vc_connection_lock:
@@ -269,7 +268,7 @@ async def native_voice_sentinel_loop():
                     except Exception:
                         pass
 
-                await home_channel.connect(cls=mafic.Player, timeout=15.0, self_deaf=True)
+                await home_channel.connect(cls=pomice.Player, timeout=15.0, self_deaf=True)
                 print("im back :3")
                 
             except Exception as e:
@@ -322,14 +321,13 @@ async def on_ready():
         print("time to set up my speakers for music")
 
 @bot.event
-async def on_track_end(event: mafic.TrackEndEvent):
-    """handles song transition workflows and queue loops natively via mafic state machine"""
-    player: mafic.Player = event.player
+async def on_pomice_track_end(player: pomice.Player, track: pomice.Track, reason: str):
+    """handles song transition workflows and queue loops natively via pomice state machine"""
     if not player:
         return
         
-    if hasattr(player, "queue") and player.queue:
-        next_track = player.queue.pop(0)
+    if not player.queue.is_empty:
+        next_track = player.queue.get()
         await player.play(next_track)
         print(f"[queue] automatically transitioning to: {next_track.title}")
     else:
@@ -442,7 +440,7 @@ async def join(interaction: discord.Interaction):
         try:
             misoyan_settings["is_connecting"] = True
             print(f"connecting to vc: {user_channel.name}")
-            await user_channel.connect(cls=mafic.Player, self_deaf=True)
+            await user_channel.connect(cls=pomice.Player, self_deaf=True)
             misoyan_settings["need_reconnection"] = False
             await interaction.followup.send("im in your vc now :D")
         except Exception as e:
@@ -457,17 +455,17 @@ async def leave(interaction: discord.Interaction):
         await interaction.response.send_message("you are not making me leave lmaooo (disabled)", ephemeral=True)
         return
     
-    vc: mafic.Player = interaction.guild.voice_client
-    if vc and vc.connected:
+    vc: pomice.Player = interaction.guild.voice_client
+    if vc and vc.is_connected:
         async with vc_connection_lock:
             misoyan_settings["need_reconnection"] = False
-            await vc.disconnect()
+            await vc.destroy()
             await interaction.response.send_message("i am free!! (yay :3)", ephemeral=True)
     else:
         await interaction.response.send_message("you want me to leave...? im not connected to a vc", ephemeral=True)
 
 class NowPlayingView(ui.LayoutView):
-    def __init__(self, track: mafic.Track, user, extra: str = "", override_cover: str = None):
+    def __init__(self, track: pomice.Track, user, extra: str = "", override_cover: str = None):
         super().__init__()
 
         user_handle = f"@{user.name}"
@@ -508,7 +506,7 @@ class NowPlayingView(ui.LayoutView):
         self.add_item(container)
 
 class FilePlayingView(ui.LayoutView):
-    def __init__(self, track: mafic.Track, user: discord.User, attachment: discord.Attachment, guild: discord.Guild = None, has_cover: bool = False):
+    def __init__(self, track: pomice.Track, user: discord.User, attachment: discord.Attachment, guild: discord.Guild = None, has_cover: bool = False):
         super().__init__()
 
         user_handle = f"@{user.name}"
@@ -558,7 +556,7 @@ class FilePlayingView(ui.LayoutView):
         self.add_item(container)
 
 class QueuePopup(ui.LayoutView):
-    def __init__(self, track: mafic.Track, user, queue_message, position: int = None):
+    def __init__(self, track: pomice.Track, user, queue_message, position: int = None):
         super().__init__()
 
         user_handle = f"@{user.name}"
@@ -615,29 +613,26 @@ async def play(interaction: discord.Interaction, search: str, timing: str = "que
     await interaction.response.defer()
 
     try:
-        vc: mafic.Player = interaction.guild.voice_client
-        if not vc or not vc.connected:
+        vc: pomice.Player = interaction.guild.voice_client
+        if not vc or not vc.is_connected:
             async with vc_connection_lock:
                 misoyan_settings["is_connecting"] = True
                 print(f"[/play] connecting to vc: {user_channel.name}")
-                vc = await user_channel.connect(cls=mafic.Player, self_deaf=True)
+                vc = await user_channel.connect(cls=pomice.Player, self_deaf=True)
                 global target_voice_channel_id
                 target_voice_channel_id = user_channel.id
                 misoyan_settings["need_reconnection"] = False
                 await asyncio.sleep(1.5)
 
-        if not hasattr(vc, "queue"):
-            vc.queue = []
-
         print(f"wait, im searching for '{search}' rn gimme a sec")
-        tracks = await vc.fetch_tracks(search)
+        results = await vc.get_tracks(search)
         
-        if not tracks:
+        if not results:
             await interaction.followup.send("i couldn't find anything with that search query :c", ephemeral=True)
             return
 
-        if isinstance(tracks, mafic.Playlist):
-            playlist: mafic.Playlist = tracks
+        if isinstance(results, pomice.Playlist):
+            playlist: pomice.Playlist = results
             playlist_tracks = playlist.tracks
 
             if not playlist_tracks:
@@ -669,13 +664,13 @@ async def play(interaction: discord.Interaction, search: str, timing: str = "que
 
             else:
                 for track in playlist_tracks[start_index:]:
-                    vc.queue.append(track)
+                    vc.queue.put(track)
                 if start_index == 0:
-                    embed = QueuePopup(playlist_tracks[0], interaction.user, f"added playlist '{playlist.name}' to queue!", len(vc.queue))
+                    embed = QueuePopup(playlist_tracks[0], interaction.user, f"added playlist '{playlist.name}' to queue!", vc.queue.size)
                     await interaction.followup.send(view=embed)
             return
 
-        track: mafic.Track = tracks[0]
+        track: pomice.Track = results[0]
         
         if not vc.current:
             await vc.play(track)
@@ -695,8 +690,8 @@ async def play(interaction: discord.Interaction, search: str, timing: str = "que
             await interaction.followup.send(view=embed)
 
         else:
-            vc.queue.append(track)
-            embed = QueuePopup(track, interaction.user, "added to queue!", len(vc.queue))
+            vc.queue.put(track)
+            embed = QueuePopup(track, interaction.user, "added to queue!", vc.queue.size)
             await interaction.followup.send(view=embed)
 
     except Exception as e:
@@ -715,8 +710,8 @@ async def now_playing(interaction: discord.Interaction):
         await interaction.response.send_message("hey, don't touch that.", ephemeral=True)
         return
 
-    vc: mafic.Player = interaction.guild.voice_client
-    if not vc or not vc.connected or not vc.current:
+    vc: pomice.Player = interaction.guild.voice_client
+    if not vc or not vc.is_connected or not vc.current:
         await interaction.response.send_message("nothing is playing right now!", ephemeral=True)
         return
 
@@ -743,16 +738,16 @@ async def playback(interaction: discord.Interaction):
         await interaction.response.send_message("hey, don't touch that.", ephemeral=True)
         return
 
-    vc: mafic.Player = interaction.guild.voice_client
-    if not vc or not vc.connected:
+    vc: pomice.Player = interaction.guild.voice_client
+    if not vc or not vc.is_connected:
         await interaction.response.send_message("i'm not even in a vc right now?", ephemeral=True)
         return
 
-    if vc.current and not vc.paused:
-        await vc.pause(True)
+    if vc.current and not vc.is_paused:
+        await vc.set_pause(True)
         await interaction.response.send_message("oh, ok i'll hold the music.")
-    elif vc.paused:
-        await vc.pause(False)
+    elif vc.is_paused:
+        await vc.set_pause(False)
         await interaction.response.send_message("alr lemme continue playing it")
     else:
         await interaction.response.send_message("so what, you want me to freeze time?", ephemeral=True)
@@ -767,8 +762,8 @@ async def skip(interaction: discord.Interaction):
         await interaction.response.send_message("hey, don't touch that.", ephemeral=True)
         return
 
-    vc: mafic.Player = interaction.guild.voice_client
-    if not vc or not vc.connected:
+    vc: pomice.Player = interaction.guild.voice_client
+    if not vc or not vc.is_connected:
         await interaction.response.send_message("i'm not even in a vc to skip anything?", ephemeral=True)
         return
 
@@ -781,8 +776,8 @@ async def skip(interaction: discord.Interaction):
 
 @bot.tree.command(name="previous", description="play the previous song if you like it :3")
 async def previous_track(interaction: discord.Interaction):
-    vc: mafic.Player = interaction.guild.voice_client
-    if not vc or not vc.connected:
+    vc: pomice.Player = interaction.guild.voice_client
+    if not vc or not vc.is_connected:
         await interaction.response.send_message("i'm not in a vc!", ephemeral=True)
         return
 
@@ -792,8 +787,6 @@ async def previous_track(interaction: discord.Interaction):
         return
 
     real_previous = history.pop()
-    if not hasattr(vc, "queue"):
-        vc.queue = []
     if vc.current:
         vc.queue.insert(0, vc.current)
         
@@ -802,9 +795,9 @@ async def previous_track(interaction: discord.Interaction):
 
 @bot.tree.command(name="replay", description="restart the current song from the beginning")
 async def replay_track(interaction: discord.Interaction):
-    vc: mafic.Player = interaction.guild.voice_client
+    vc: pomice.Player = interaction.guild.voice_client
     
-    if not vc or not vc.connected or not vc.current:
+    if not vc or not vc.is_connected or not vc.current:
         await interaction.response.send_message("tsk, seriously?")
         return
 
@@ -813,7 +806,7 @@ async def replay_track(interaction: discord.Interaction):
     await interaction.response.send_message(f"replaying **{track.title}**")
 
 class SongQueue(ui.LayoutView):
-    def __init__(self, vc: mafic.Player, user):
+    def __init__(self, vc: pomice.Player, user):
         super().__init__()
 
         queue_sections = []
@@ -835,7 +828,7 @@ class SongQueue(ui.LayoutView):
                 ui.Section(ui.TextDisplay(current_text), accessory=ui.Thumbnail(current_cover))
             )
 
-        queue = getattr(vc, "queue", [])
+        queue = list(vc.queue) if hasattr(vc, "queue") else []
         for i, track in enumerate(queue):
             if i >= 4:
                 break
@@ -861,10 +854,10 @@ class SongQueue(ui.LayoutView):
 
 @bot.tree.command(name="queue", description="see what songs are lined up next")
 async def view_queue(interaction: discord.Interaction):
-    vc: mafic.Player = interaction.guild.voice_client
+    vc: pomice.Player = interaction.guild.voice_client
 
-    queue = getattr(vc, "queue", []) if vc else []
-    if not vc or not vc.connected or (not vc.current and len(queue) == 0):
+    queue = list(vc.queue) if vc and hasattr(vc, "queue") else []
+    if not vc or not vc.is_connected or (not vc.current and len(queue) == 0):
         await interaction.response.send_message("the queue is completely empty!", ephemeral=True)
         return
 
@@ -903,18 +896,15 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
     await interaction.response.defer()
 
     try:
-        vc: mafic.Player = interaction.guild.voice_client
-        if not vc or not vc.connected:
+        vc: pomice.Player = interaction.guild.voice_client
+        if not vc or not vc.is_connected:
             misoyan_settings["is_connecting"] = True
             print(f"[play-file] connecting to vc: {user_channel.name}")
-            vc = await user_channel.connect(cls=mafic.Player, self_deaf=True)
+            vc = await user_channel.connect(cls=pomice.Player, self_deaf=True)
             global target_voice_channel_id
             target_voice_channel_id = user_channel.id
             misoyan_settings["need_reconnection"] = False
             await asyncio.sleep(1.5)
-
-        if not hasattr(vc, "queue"):
-            vc.queue = []
 
         # --- metadata extraction block ---
         has_extracted_cover = False
@@ -934,12 +924,12 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
             except Exception as metadata_error:
                 print(f"[!] couldn't rip metadata tags from track: {metadata_error}")
 
-        tracks = await vc.fetch_tracks(attachment.url)
-        if not tracks:
+        results = await vc.get_tracks(attachment.url)
+        if not results:
             await interaction.followup.send("i failed to decode your file stream natively :c", ephemeral=True)
             return
             
-        track = tracks[0]
+        track = results[0]
 
         if not vc.current:
             await vc.play(track)
@@ -959,8 +949,8 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
             await interaction.followup.send(view=embed)
 
         else:
-            vc.queue.append(track)
-            embed = QueuePopup(track, interaction.user, "added file to queue!", len(vc.queue))
+            vc.queue.put(track)
+            embed = QueuePopup(track, interaction.user, "added file to queue!", vc.queue.size)
             await interaction.followup.send(view=embed)
 
     except Exception as e:
@@ -1010,13 +1000,18 @@ class LoopStatusView(ui.LayoutView):
     app_commands.Choice(name="off", value="off")
 ])
 async def loop_cmd(interaction: discord.Interaction, mode: app_commands.Choice[str]):
-    vc: mafic.Player = interaction.guild.voice_client
+    vc: pomice.Player = interaction.guild.voice_client
 
     if not vc:
         await interaction.response.send_message("there's no active player running in this server!", ephemeral=True)
         return
 
-    vc.loop = mode.value
+    if mode.value == "current":
+        vc.queue.set_loop_mode(pomice.LoopMode.TRACK)
+    elif mode.value == "queue":
+        vc.queue.set_loop_mode(pomice.LoopMode.QUEUE)
+    else:
+        vc.queue.set_loop_mode(pomice.LoopMode.NONE)
 
     view_embed = LoopStatusView(mode.value, vc.current, interaction.user)
     await interaction.response.send_message(view=view_embed)
@@ -1026,8 +1021,8 @@ async def systemstatus(interaction: discord.Interaction):
     total_guilds = len(bot.guilds)
     latency = round(bot.latency * 1000)
     
-    vc: mafic.Player = interaction.guild.voice_client
-    current_vc_connections = 1 if vc and vc.connected else 0
+    vc: pomice.Player = interaction.guild.voice_client
+    current_vc_connections = 1 if vc and vc.is_connected else 0
     bot_thumbnail = bot.user.display_avatar.url
     
     embed = discord.Embed(
