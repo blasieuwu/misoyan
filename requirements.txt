@@ -1,6 +1,6 @@
 discord.py
 PyNaCl
 davey
-wavelink
+mafic
 yt-dlp[default]
 mutagen
