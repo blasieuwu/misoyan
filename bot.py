@@ -226,8 +226,8 @@ async def connect_nodes():
     try:
         await lava_lyra.NodePool.create_node(
             bot=bot,
-            host=f"https://{LAVALINK_HOST}",  # or "wss://..."
-            port=LAVALINK_PORT,               # 443
+            host=LAVALINK_HOST,  # just "lava.link" (no "https://")
+            port=LAVALINK_PORT,  # integer like 80 or 443
             identifier="misoyan",
             password=LAVALINK_PASS,
             fallback=False
@@ -235,7 +235,7 @@ async def connect_nodes():
         print("[lavalink] successfully built a connection with our node pool!")
     except Exception as e:
         print(f"[lavalink] fail to build node pipeline: {e}")
-
+        
 @tasks.loop(seconds=15)
 async def native_voice_sentinel_loop():
     """automatically monitors, isolates, and heals crashes silently without spamming dead transport pipes"""
