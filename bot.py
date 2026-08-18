@@ -230,7 +230,8 @@ async def connect_nodes():
             port=LAVALINK_PORT,
             label="misoyan",
             password=LAVALINK_PASS,
-            secure=LAVALINK_SECURE
+            secure=LAVALINK_SECURE,
+            rest_version="v4"
         )
         print("[lavalink] successfully built a connection with our node pool!")
     except Exception as e:
