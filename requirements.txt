@@ -2,6 +2,6 @@ discord.py
 PyNaCl
 davey
 wavelink
-yt-dlp[default]
+yt-dlp
 mutagen
 typing_extensions

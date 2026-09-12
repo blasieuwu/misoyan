@@ -10,14 +10,14 @@ from aiohttp import web
 import discord
 from discord import app_commands, ui
 from discord.ext import commands, tasks
-import wavelink  # powers her speakers
+import lava_lyra  # powers her speakers
 from mutagen.mp3 import MP3 # for the file cover art embedding
 from mutagen.id3 import ID3
 import logging
 
 # logging
 logging.basicConfig(level=logging.INFO)
-logging.getLogger("wavelink").setLevel(logging.DEBUG)
+logging.getLogger("lava_lyra").setLevel(logging.DEBUG)
 
 # handle sigterm gracefully when render stops/restarts the container
 def handle_sigterm(*args):
@@ -227,7 +227,7 @@ async def connect_nodes():
     uri = f"{scheme}://{LAVALINK_HOST}:{LAVALINK_PORT}"
 
     nodes = [
-        wavelink.Node(
+        lava_lyra.Node(
             identifier="misoyan",
             uri=uri,
             password=LAVALINK_PASS,
@@ -237,7 +237,7 @@ async def connect_nodes():
 
     try:
         print("\x1b[1;38;2;255;127;0m[lavalink] attempting to connect to the nodes...\x1b[0m")
-        await wavelink.Pool.connect(nodes=nodes, client=bot)
+        await lava_lyra.Pool.connect(nodes=nodes, client=bot)
     except Exception as e:
         print(f"\x1b[1;38;2;255;127;0m[lavalink]\x1b[0m \x1b[31mfail to build node pipeline: \x1b[1;4;31m{e}\x1b[0m")
         
@@ -255,7 +255,7 @@ async def native_voice_sentinel_loop():
     if not home_channel or not isinstance(home_channel, discord.VoiceChannel):
         return
 
-    vc: wavelink.Player = home_channel.guild.voice_client
+    vc: lava_lyra.Player = home_channel.guild.voice_client
     is_disconnected = not vc or not vc.is_connected
 
     if is_disconnected or misoyan_settings["need_reconnection"]:
@@ -273,7 +273,7 @@ async def native_voice_sentinel_loop():
                     except Exception:
                         pass
 
-                await home_channel.connect(cls=wavelink.Player, timeout=15.0, self_deaf=True)
+                await home_channel.connect(cls=lava_lyra.Player, timeout=15.0, self_deaf=True)
                 print("\x1b[1;38;2;88;101;242m[discord - vc]\x1b[0m connection restablished")
                 
             except Exception as e:
@@ -326,9 +326,9 @@ async def on_ready():
         print("\x1b[1;38;2;88;101;242m[discord - vc]\x1b[0m starting auto-reconnect process...")
 
 @bot.event
-async def on_wavelink_track_end(payload: wavelink.TrackEndEventPayload):
-    """handles song transition workflows and queue loops natively via wavelink state machine"""
-    player: wavelink.Player = payload.player
+async def on_lava_lyra_track_end(payload: lava_lyra.TrackEndEventPayload):
+    """handles song transition workflows and queue loops natively via lava_lyra state machine"""
+    player: lava_lyra.Player = payload.player
     if not player:
         return
         
@@ -340,7 +340,7 @@ async def on_wavelink_track_end(payload: wavelink.TrackEndEventPayload):
         print("\x1b[1;38;2;29;185;84m[music - queue]\x1b[0m queue is empty.")
 
 @bot.event
-async def on_wavelink_node_ready(payload: wavelink.NodeReadyEventPayload) -> None:
+async def on_lava_lyra_node_ready(payload: lava_lyra.NodeReadyEventPayload) -> None:
     node = payload.node
     print(f"\x1b[1;32m[lavalink] node '{node.identifier}' is ready!\x1b[0m")
 
@@ -451,7 +451,7 @@ async def join(interaction: discord.Interaction):
         try:
             misoyan_settings["is_connecting"] = True
             print(f"\x1b[1;38;2;88;101;242;m[discord - vc | /join]\x1b[0m attempting vc connection to channel '{user_channel.name}'")
-            await user_channel.connect(cls=wavelink.Player, self_deaf=True)
+            await user_channel.connect(cls=lava_lyra.Player, self_deaf=True)
             misoyan_settings["need_reconnection"] = False
             await interaction.followup.send("im in your vc now :D")
         except Exception as e:
@@ -466,7 +466,7 @@ async def leave(interaction: discord.Interaction):
         await interaction.response.send_message("you are not making me leave lmaooo (disabled)", ephemeral=True)
         return
     
-    vc: wavelink.Player = interaction.guild.voice_client
+    vc: lava_lyra.Player = interaction.guild.voice_client
     if vc and vc.is_connected:
         async with vc_connection_lock:
             misoyan_settings["need_reconnection"] = False
@@ -476,7 +476,7 @@ async def leave(interaction: discord.Interaction):
         await interaction.response.send_message("you want me to leave...? im not connected to a vc", ephemeral=True)
 
 class NowPlayingView(ui.LayoutView):
-    def __init__(self, track: wavelink.Playable, user, extra: str = "", override_cover: str = None):
+    def __init__(self, track: lava_lyra.Playable, user, extra: str = "", override_cover: str = None):
         super().__init__()
 
         user_handle = f"@{user.name}"
@@ -517,7 +517,7 @@ class NowPlayingView(ui.LayoutView):
         self.add_item(container)
 
 class FilePlayingView(ui.LayoutView):
-    def __init__(self, track: wavelink.Playable, user: discord.User, attachment: discord.Attachment, guild: discord.Guild = None, has_cover: bool = False):
+    def __init__(self, track: lava_lyra.Playable, user: discord.User, attachment: discord.Attachment, guild: discord.Guild = None, has_cover: bool = False):
         super().__init__()
 
         user_handle = f"@{user.name}"
@@ -567,7 +567,7 @@ class FilePlayingView(ui.LayoutView):
         self.add_item(container)
 
 class QueuePopup(ui.LayoutView):
-    def __init__(self, track: wavelink.Playable, user, queue_message, position: int = None):
+    def __init__(self, track: lava_lyra.Playable, user, queue_message, position: int = None):
         super().__init__()
 
         user_handle = f"@{user.name}"
@@ -624,26 +624,26 @@ async def play(interaction: discord.Interaction, search: str, timing: str = "que
     await interaction.response.defer()
 
     try:
-        vc: wavelink.Player = interaction.guild.voice_client
+        vc: lava_lyra.Player = interaction.guild.voice_client
         if not vc or not vc.is_connected:
             async with vc_connection_lock:
                 misoyan_settings["is_connecting"] = True
                 print(f"\x1b[1;38;2;88;101;242;m[discord - vc | /play]\x1b[0m attempting connection to channel '{user_channel.name}'")
-                vc = await user_channel.connect(cls=wavelink.Player, self_deaf=True)
+                vc = await user_channel.connect(cls=lava_lyra.Player, self_deaf=True)
                 global target_voice_channel_id
                 target_voice_channel_id = user_channel.id
                 misoyan_settings["need_reconnection"] = False
                 await asyncio.sleep(1.5)
 
         print(f"\x1b[1;38;2;255;127;0m[lavalink]\x1b[0m attempting to search for query: '{search}'")
-        results = await wavelink.Playable.search(search)
+        results = await lava_lyra.Playable.search(search)
         
         if not results:
             await interaction.followup.send("i couldn't find anything with that search query :c", ephemeral=True)
             return
 
-        if isinstance(results, wavelink.Playlist):
-            playlist: wavelink.Playlist = results
+        if isinstance(results, lava_lyra.Playlist):
+            playlist: lava_lyra.Playlist = results
             playlist_tracks = playlist.tracks
 
             if not playlist_tracks:
@@ -682,7 +682,7 @@ async def play(interaction: discord.Interaction, search: str, timing: str = "que
                     await interaction.followup.send(view=embed)
             return
 
-        track: wavelink.Playable = results[0]
+        track: lava_lyra.Playable = results[0]
         
         if not vc.current:
             print(f"\x1b[1;38;2;29;185;84m[music | /play]\x1b[0m now playing '{track.title}'")
@@ -726,7 +726,7 @@ async def now_playing(interaction: discord.Interaction):
         await interaction.response.send_message("hey, don't touch that.", ephemeral=True)
         return
 
-    vc: wavelink.Player = interaction.guild.voice_client
+    vc: lava_lyra.Player = interaction.guild.voice_client
     if not vc or not vc.is_connected or not vc.current:
         await interaction.response.send_message("nothing is playing right now!", ephemeral=True)
         return
@@ -754,7 +754,7 @@ async def playback(interaction: discord.Interaction):
         await interaction.response.send_message("hey, don't touch that.", ephemeral=True)
         return
 
-    vc: wavelink.Player = interaction.guild.voice_client
+    vc: lava_lyra.Player = interaction.guild.voice_client
     if not vc or not vc.is_connected:
         await interaction.response.send_message("i'm not even in a vc right now?", ephemeral=True)
         return
@@ -778,7 +778,7 @@ async def skip(interaction: discord.Interaction):
         await interaction.response.send_message("hey, don't touch that.", ephemeral=True)
         return
 
-    vc: wavelink.Player = interaction.guild.voice_client
+    vc: lava_lyra.Player = interaction.guild.voice_client
     if not vc or not vc.is_connected:
         await interaction.response.send_message("i'm not even in a vc to skip anything?", ephemeral=True)
         return
@@ -792,7 +792,7 @@ async def skip(interaction: discord.Interaction):
 
 @bot.tree.command(name="previous", description="play the previous song if you like it :3")
 async def previous_track(interaction: discord.Interaction):
-    vc: wavelink.Player = interaction.guild.voice_client
+    vc: lava_lyra.Player = interaction.guild.voice_client
     if not vc or not vc.is_connected:
         await interaction.response.send_message("i'm not in a vc!", ephemeral=True)
         return
@@ -811,7 +811,7 @@ async def previous_track(interaction: discord.Interaction):
 
 @bot.tree.command(name="replay", description="restart the current song from the beginning")
 async def replay_track(interaction: discord.Interaction):
-    vc: wavelink.Player = interaction.guild.voice_client
+    vc: lava_lyra.Player = interaction.guild.voice_client
     
     if not vc or not vc.is_connected or not vc.current:
         await interaction.response.send_message("tsk, seriously?")
@@ -822,7 +822,7 @@ async def replay_track(interaction: discord.Interaction):
     await interaction.response.send_message(f"replaying **{track.title}**")
 
 class SongQueue(ui.LayoutView):
-    def __init__(self, vc: wavelink.Player, user):
+    def __init__(self, vc: lava_lyra.Player, user):
         super().__init__()
 
         queue_sections = []
@@ -870,7 +870,7 @@ class SongQueue(ui.LayoutView):
 
 @bot.tree.command(name="queue", description="see what songs are lined up next")
 async def view_queue(interaction: discord.Interaction):
-    vc: wavelink.Player = interaction.guild.voice_client
+    vc: lava_lyra.Player = interaction.guild.voice_client
 
     queue = list(vc.queue) if vc and hasattr(vc, "queue") else []
     if not vc or not vc.is_connected or (not vc.current and len(queue) == 0):
@@ -912,11 +912,11 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
     await interaction.response.defer()
 
     try:
-        vc: wavelink.Player = interaction.guild.voice_client
+        vc: lava_lyra.Player = interaction.guild.voice_client
         if not vc or not vc.is_connected:
             misoyan_settings["is_connecting"] = True
             print(f"\x1b[1;38;2;88;101;242;m[discord - vc | /play-file]\x1b[0m attempting connection to channel '{user_channel.name}'")
-            vc = await user_channel.connect(cls=wavelink.Player, self_deaf=True)
+            vc = await user_channel.connect(cls=lava_lyra.Player, self_deaf=True)
             global target_voice_channel_id
             target_voice_channel_id = user_channel.id
             misoyan_settings["need_reconnection"] = False
@@ -940,7 +940,7 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
             except Exception as e:
                 print(f"\x1b[1;38;2;29;185;84m[/play-file]\x1b[0m an error occured during extration of metadata tags: \x1b[1;4;31m{e}\x1b[0m")
 
-        results = await wavelink.Playable.search(attachment.url)
+        results = await lava_lyra.Playable.search(attachment.url)
         if not results:
             await interaction.followup.send("i failed to decode your file stream natively :c", ephemeral=True)
             return
@@ -1020,21 +1020,21 @@ class LoopStatusView(ui.LayoutView):
     app_commands.Choice(name="off", value="off")
 ])
 async def loop_cmd(interaction: discord.Interaction, mode: app_commands.Choice[str]):
-    vc: wavelink.Player = interaction.guild.voice_client
+    vc: lava_lyra.Player = interaction.guild.voice_client
 
     if not vc:
         await interaction.response.send_message("there's no active player running in this server!", ephemeral=True)
         return
 
     if mode.value == "current":
-        vc.queue.mode = wavelink.QueueMode.loop
+        vc.queue.mode = lava_lyra.QueueMode.loop
         print(f"\x1b[1;38;2;29;185;84m[music - queue]\x1b[0m queue was set to loop the current song")
     elif mode.value == "queue":
-        vc.queue.mode = wavelink.QueueMode.loop_all
+        vc.queue.mode = lava_lyra.QueueMode.loop_all
         print(f"\x1b[1;38;2;29;185;84m[music - queue]\x1b[0m queue was set to loop the whole queue list")
     else:
         print(f"\x1b[1;38;2;29;185;84m[music - queue]\x1b[0m queue was set to not loop")
-        vc.queue.mode = wavelink.QueueMode.normal
+        vc.queue.mode = lava_lyra.QueueMode.normal
 
     view_embed = LoopStatusView(mode.value, vc.current, interaction.user)
     await interaction.response.send_message(view=view_embed)
@@ -1044,7 +1044,7 @@ async def systemstatus(interaction: discord.Interaction):
     total_guilds = len(bot.guilds)
     latency = round(bot.latency * 1000)
     
-    vc: wavelink.Player = interaction.guild.voice_client
+    vc: lava_lyra.Player = interaction.guild.voice_client
     current_vc_connections = 1 if vc and vc.is_connected else 0
     bot_thumbnail = bot.user.display_avatar.url
     
