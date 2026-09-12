@@ -101,8 +101,7 @@ reply_list = [
     "fih :3",
     "please do the fih",
     "i loveeee fih",
-    "hi, my name is misoyan and I AM A FIH",
-    "hello :D",
+    "hello :d",
     "the fih gods are watching us",
     "https://tenor.com/view/spinning-fish-gif-11746948154213447163",
     "https://tenor.com/view/upside-down-spinning-fish-long-sticker-gif-14191013706827067344",
@@ -117,7 +116,7 @@ reply_list = [
     "spinning fish",
     "me and fih :3",
     "🐟", 
-    "im in your walls :D"
+    "im in your walls :d"
 ]
 
 os.makedirs("cache", exist_ok=True)
@@ -237,7 +236,7 @@ async def connect_nodes():
 
     try:
         print("\x1b[1;38;2;255;127;0m[lavalink] attempting to connect to the nodes...\x1b[0m")
-        await lava_lyra.Pool.connect(nodes=nodes, client=bot)
+        await lava_lyra.NodePool.connect(nodes=nodes, client=bot)
     except Exception as e:
         print(f"\x1b[1;38;2;255;127;0m[lavalink]\x1b[0m \x1b[31mfail to build node pipeline: \x1b[1;4;31m{e}\x1b[0m")
         
@@ -340,8 +339,7 @@ async def on_lava_lyra_track_end(payload: lava_lyra.TrackEndEvent):
         print("\x1b[1;38;2;29;185;84m[music - queue]\x1b[0m queue is empty.")
 
 @bot.event
-async def on_lava_lyra_node_ready(payload: lava_lyra.NodeReadyEventPayload) -> None:
-    node = payload.node
+async def on_lava_lyra_node_ready(node: lava_lyra.Node) -> None:
     print(f"\x1b[1;32m[lavalink] node '{node.identifier}' is ready!\x1b[0m")
 
 @bot.event
@@ -374,7 +372,7 @@ async def on_message(message: discord.Message):
         except discord.Forbidden:
             pass
         except Exception as e:
-            print(f"\x1b[1;38;2;88;101;242;m[discord - afk/nicknames]\x1b[0m an error occured while removing [AFK] from a person's nickname: \x1b[1;4;31m{e}\x1b[0m")
+            print(f"\x1b[1;38;2;88;101;242;m[discord - afk/nicknames]\x1b[0m an error occured while removing [afk] from a person's nickname: \x1b[1;4;31m{e}\x1b[0m")
 
         await message.channel.send(f"welcome back, {message.author.mention}. you're no longer afk.")
     
@@ -409,7 +407,7 @@ async def afk(interaction: discord.Interaction, reason: str = "busy :3"):
 
     # try updating their server nickname
     try:
-        new_nick = f"[AFK] {original_nick}"
+        new_nick = f"[afk] {original_nick}"
         # discord caps nicknames at 32 characters
         if len(new_nick) > 32:
             new_nick = new_nick[:32]
@@ -419,7 +417,7 @@ async def afk(interaction: discord.Interaction, reason: str = "busy :3"):
         # bot lacks 'manage_nicknames' permission or user is server owner / higher role
         pass
     except Exception as e:
-        print(f"\x1b[1;38;2;88;101;242;m[discord - afk/nicknames]\x1b[0m an error occured while adding [AFK] to a person's nickname: \x1b[1;4;31m{e}\x1b[0m")
+        print(f"\x1b[1;38;2;88;101;242;m[discord - afk/nicknames]\x1b[0m an error occured while adding [afk] to a person's nickname: \x1b[1;4;31m{e}\x1b[0m")
 
     await interaction.response.send_message(f"ok, you're afk with reason: '*{reason}*'", ephemeral=True)
     
@@ -453,7 +451,7 @@ async def join(interaction: discord.Interaction):
             print(f"\x1b[1;38;2;88;101;242;m[discord - vc | /join]\x1b[0m attempting vc connection to channel '{user_channel.name}'")
             await user_channel.connect(cls=lava_lyra.Player, self_deaf=True)
             misoyan_settings["need_reconnection"] = False
-            await interaction.followup.send("im in your vc now :D")
+            await interaction.followup.send("im in your vc now :d")
         except Exception as e:
             print(f"\x1b[1;38;2;88;101;242;m[discord - vc | /join]\x1b[0m an exception occured while connecting: {e}")
             await interaction.followup.send(f"so i may have failed to connect...: {e}", ephemeral=True)
@@ -476,7 +474,7 @@ async def leave(interaction: discord.Interaction):
         await interaction.response.send_message("you want me to leave...? im not connected to a vc", ephemeral=True)
 
 class NowPlayingView(ui.LayoutView):
-    def __init__(self, track: lava_lyra.Playable, user, extra: str = "", override_cover: str = None):
+    def __init__(self, track: lava_lyra.Track, user, extra: str = "", override_cover: str = None):
         super().__init__()
 
         user_handle = f"@{user.name}"
@@ -488,7 +486,7 @@ class NowPlayingView(ui.LayoutView):
         elif hasattr(track, 'artwork_url') and track.artwork_url:
             track_cover_url = track.artwork_url
         else:
-            track_cover_url = "https://placehold.co/240x240/eaeaea/969696.png?text=No+Cover"
+            track_cover_url = "https://placehold.co/240x240/eaeaea/969696.png?text=no+cover"
 
         if getattr(track, 'length', None):
             minutes = int((track.length // 1000) // 60)
@@ -506,7 +504,7 @@ class NowPlayingView(ui.LayoutView):
         display_prefix = " (file)" if (hasattr(track, 'uri') and track.uri and "discordapp.com" in track.uri) else extra
         now_playing = ui.TextDisplay(f"-# now playing!{display_prefix} - requested by {user_handle} :3")
         cover_art = ui.MediaGallery(discord.MediaGalleryItem(track_cover_url))
-        track_metadata = ui.TextDisplay(f"## {track_title}\nArtist: **{artist_name}**\nDuration: {duration}")
+        track_metadata = ui.TextDisplay(f"## {track_title}\nartist: **{artist_name}**\nduration: {duration}")
 
         container = ui.Container(
             now_playing,
@@ -517,7 +515,7 @@ class NowPlayingView(ui.LayoutView):
         self.add_item(container)
 
 class FilePlayingView(ui.LayoutView):
-    def __init__(self, track: lava_lyra.Playable, user: discord.User, attachment: discord.Attachment, guild: discord.Guild = None, has_cover: bool = False):
+    def __init__(self, track: lava_lyra.Track, user: discord.User, attachment: discord.Attachment, guild: discord.Guild = None, has_cover: bool = False):
         super().__init__()
 
         user_handle = f"@{user.name}"
@@ -562,12 +560,12 @@ class FilePlayingView(ui.LayoutView):
 
         container = ui.Container(
             *layout_components,
-            accent_color=discord.Color.from_str("#F9C788")
+            accent_color=discord.Color.from_str("#f9c788")
         )
         self.add_item(container)
 
 class QueuePopup(ui.LayoutView):
-    def __init__(self, track: lava_lyra.Playable, user, queue_message, position: int = None):
+    def __init__(self, track: lava_lyra.Track, user, queue_message, position: int = None):
         super().__init__()
 
         user_handle = f"@{user.name}"
@@ -577,7 +575,7 @@ class QueuePopup(ui.LayoutView):
         elif hasattr(track, 'artwork_url') and track.artwork_url:
             track_cover_url = track.artwork_url
         else:
-            track_cover_url = "https://placehold.co/240x240/eaeaea/969696.png?text=No+Cover"
+            track_cover_url = "https://placehold.co/240x240/eaeaea/969696.png?text=no+cover"
 
         if getattr(track, 'length', None):
             minutes = int((track.length // 1000) // 60)
@@ -588,12 +586,12 @@ class QueuePopup(ui.LayoutView):
 
         index = ""
         if position:
-            index = f"Position: #{position}"
+            index = f"position: #{position}"
         artist_name = getattr(track, 'author', "unknown") or "unknown"
-        text_metadata = f"-# requested by {user_handle} :3\n{queue_message}\n# {track.title}\nArtist: **{artist_name}**\nDuration: {duration}\n{index}"
+        text_metadata = f"-# requested by {user_handle} :3\n{queue_message}\n# {track.title}\nartist: **{artist_name}**\nduration: {duration}\n{index}"
 
         section = ui.Section(ui.TextDisplay(text_metadata), accessory=ui.Thumbnail(track_cover_url))
-        container = ui.Container(section, accent_color=discord.Color.from_str('#5C9F05'))
+        container = ui.Container(section, accent_color=discord.Color.from_str('#5c9f05'))
 
         self.add_item(container)
 
@@ -636,7 +634,7 @@ async def play(interaction: discord.Interaction, search: str, timing: str = "que
                 await asyncio.sleep(1.5)
 
         print(f"\x1b[1;38;2;255;127;0m[lavalink]\x1b[0m attempting to search for query: '{search}'")
-        results = await lava_lyra.Playable.search(search)
+        results = await lava_lyra.Track.search(search)
         
         if not results:
             await interaction.followup.send("i couldn't find anything with that search query :c", ephemeral=True)
@@ -682,7 +680,7 @@ async def play(interaction: discord.Interaction, search: str, timing: str = "que
                     await interaction.followup.send(view=embed)
             return
 
-        track: lava_lyra.Playable = results[0]
+        track: lava_lyra.Track = results[0]
         
         if not vc.current:
             print(f"\x1b[1;38;2;29;185;84m[music | /play]\x1b[0m now playing '{track.title}'")
@@ -829,7 +827,7 @@ class SongQueue(ui.LayoutView):
 
         if vc.current:
             current_track = vc.current
-            current_cover = getattr(current_track, 'artwork', None) or getattr(current_track, 'artwork_url', None) or "https://placehold.co/240x240/eaeaea/969696.png?text=No+Cover"
+            current_cover = getattr(current_track, 'artwork', None) or getattr(current_track, 'artwork_url', None) or "https://placehold.co/240x240/eaeaea/969696.png?text=no+cover"
 
             if getattr(current_track, 'length', None):
                 curr_min = int((current_track.length // 1000) // 60)
@@ -838,7 +836,7 @@ class SongQueue(ui.LayoutView):
             else:
                 curr_duration = "97:663? (unknown)"
 
-            current_text = f"## {current_track.title}\nArtist: **{getattr(current_track, 'author', 'unknown') or 'unknown'}**\nDuration: {curr_duration}\nPosition: playing!"
+            current_text = f"## {current_track.title}\nartist: **{getattr(current_track, 'author', 'unknown') or 'unknown'}**\nduration: {curr_duration}\nposition: playing!"
             
             queue_sections.append(
                 ui.Section(ui.TextDisplay(current_text), accessory=ui.Thumbnail(current_cover))
@@ -859,13 +857,13 @@ class SongQueue(ui.LayoutView):
             else:
                 track_duration = "97:663? (unknown)"
 
-            track_text = f"## {track.title}\nArtist: **{getattr(track, 'author', 'unknown') or 'unknown'}**\nDuration: {track_duration}\nPosition: {position_text}"
+            track_text = f"## {track.title}\nartist: **{getattr(track, 'author', 'unknown') or 'unknown'}**\nduration: {track_duration}\nposition: {position_text}"
             
             queue_sections.append(
                 ui.Section(ui.TextDisplay(track_text), accessory=ui.Thumbnail(track_cover))
             )
 
-        container = ui.Container(*queue_sections, accent_color=discord.Color.from_str("#2C2C2C"))
+        container = ui.Container(*queue_sections, accent_color=discord.Color.from_str("#2c2c2c"))
         self.add_item(container)
 
 @bot.tree.command(name="queue", description="see what songs are lined up next")
@@ -940,7 +938,7 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
             except Exception as e:
                 print(f"\x1b[1;38;2;29;185;84m[/play-file]\x1b[0m an error occured during extration of metadata tags: \x1b[1;4;31m{e}\x1b[0m")
 
-        results = await lava_lyra.Playable.search(attachment.url)
+        results = await lava_lyra.Track.search(attachment.url)
         if not results:
             await interaction.followup.send("i failed to decode your file stream natively :c", ephemeral=True)
             return
@@ -959,7 +957,7 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
             await vc.skip()
             print(f"\x1b[1;38;2;29;185;84m[music | /play]\x1b[0m now playing '{track.title}' (replaced)")
             view_embed = FilePlayingView(track, interaction.user, attachment, guild=interaction.guild, has_cover=has_extracted_cover)
-            await interaction.followup.send(view=embed)
+            await interaction.followup.send(view=view_embed)
 
         elif timing == "next":
             vc.queue.put_at(0, track)
@@ -989,20 +987,20 @@ class LoopStatusView(ui.LayoutView):
             if track and (getattr(track, 'artwork', None) or getattr(track, 'artwork_url', None)):
                 thumbnail_url = getattr(track, 'artwork', None) or getattr(track, 'artwork_url', None)
             else:
-                thumbnail_url = "https://placehold.co/240x240/eaeaea/969696.png?text=No+Cover"
+                thumbnail_url = "https://placehold.co/240x240/eaeaea/969696.png?text=no+cover"
             
             card_text = f"-# requested by {user_handle}\n### loop: current song\nthe current song will now loop forever :3"
-            accent = discord.Color.from_str("#5C9F05")
+            accent = discord.Color.from_str("#5c9f05")
             
         elif mode == "queue":
             thumbnail_url = user.display_avatar.url
             card_text = f"-# requested by {user_handle}\n### loop: queue\nthe entire queue will now loop :o"
-            accent = discord.Color.from_str("#85C2F0")
+            accent = discord.Color.from_str("#85c2f0")
             
         else: 
             thumbnail_url = user.display_avatar.url
-            card_text = f"-# requested by {user_handle}\n### loop: off\nloop has been turned off :P"
-            accent = discord.Color.from_str("#FF0000")
+            card_text = f"-# requested by {user_handle}\n### loop: off\nloop has been turned off :p"
+            accent = discord.Color.from_str("#ff0000")
 
         container = ui.Container(
             ui.Section(
@@ -1027,19 +1025,19 @@ async def loop_cmd(interaction: discord.Interaction, mode: app_commands.Choice[s
         return
 
     if mode.value == "current":
-        vc.queue.mode = lava_lyra.QueueMode.loop
+        vc.queue.mode = lava_lyra.LoopMode.track
         print(f"\x1b[1;38;2;29;185;84m[music - queue]\x1b[0m queue was set to loop the current song")
     elif mode.value == "queue":
-        vc.queue.mode = lava_lyra.QueueMode.loop_all
+        vc.queue.mode = lava_lyra.LoopMode.queue
         print(f"\x1b[1;38;2;29;185;84m[music - queue]\x1b[0m queue was set to loop the whole queue list")
     else:
         print(f"\x1b[1;38;2;29;185;84m[music - queue]\x1b[0m queue was set to not loop")
-        vc.queue.mode = lava_lyra.QueueMode.normal
+        vc.queue.mode = lava_lyra.LoopMode.off
 
     view_embed = LoopStatusView(mode.value, vc.current, interaction.user)
     await interaction.response.send_message(view=view_embed)
 
-@bot.tree.command(name="status", description="check out my internal self :D")
+@bot.tree.command(name="status", description="check out my internal self :d")
 async def systemstatus(interaction: discord.Interaction):
     total_guilds = len(bot.guilds)
     latency = round(bot.latency * 1000)
@@ -1109,10 +1107,10 @@ async def systemshutdown(interaction: discord.Interaction):
         await interaction.response.send_message("you're not blasie, get away", ephemeral=True)
         return
         
-    await interaction.response.send_message("OUCH D:")
+    await interaction.response.send_message("ouch d:")
     await bot.close()
 
-@bot.tree.command(name="say", description="[admin/owner] make misoyan speak :D")
+@bot.tree.command(name="say", description="[admin/owner] make misoyan speak :d")
 @app_commands.describe(message="the exact text you want misoyan to broadcast")
 async def systemsay(interaction: discord.Interaction, message: str):
     is_creator = interaction.user.id == creator_id
@@ -1165,7 +1163,7 @@ async def restrict_user(interaction: discord.Interaction, target: discord.User):
         await interaction.response.send_message(f"get lost! {target.mention} has been blacklisted.", ephemeral=True)
 
 @bot.tree.command(name="webhook", description="[blasie-only] create a new webhook :o")
-@app_commands.describe(message="atleast give it a name :P")
+@app_commands.describe(message="atleast give it a name :p")
 async def create_webhook(interaction: discord.Interaction, message: str = "a webhook - misoyan"):
     if interaction.user.id != creator_id:
         await interaction.response.send_message("you're not blasie, get away", ephemeral=True)
@@ -1173,7 +1171,7 @@ async def create_webhook(interaction: discord.Interaction, message: str = "a web
         
     if isinstance(interaction.channel, discord.TextChannel):
         try:
-            webhook_avatar_url = "https://placehold.co/240x240/eaeaea/969696.png?text=Webhook"
+            webhook_avatar_url = "https://placehold.co/240x240/eaeaea/969696.png?text=webhook"
             avatar_image = None
             
             async with aiohttp.ClientSession() as session:
