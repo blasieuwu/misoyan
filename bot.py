@@ -230,7 +230,8 @@ async def connect_nodes():
         wavelink.Node(
             identifier="misoyan",
             uri=uri,
-            password=LAVALINK_PASS
+            password=LAVALINK_PASS,
+            resume_timeout=0
         )
     ]
 
