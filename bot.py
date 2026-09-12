@@ -225,18 +225,16 @@ async def connect_nodes():
     scheme = "https" if LAVALINK_SECURE else "http"
     uri = f"{scheme}://{LAVALINK_HOST}:{LAVALINK_PORT}"
 
-    nodes = [
-        lava_lyra.Node(
-            identifier="misoyan",
-            uri=uri,
-            password=LAVALINK_PASS,
-            resume_timeout=0
-        )
-    ]
-
     try:
         print("\x1b[1;38;2;255;127;0m[lavalink] attempting to connect to the nodes...\x1b[0m")
-        await lava_lyra.NodePool.connect(nodes=nodes, client=bot)
+        await lava_lyra.NodePool.create_node(
+            bot=CustomBot,
+            host=uri,
+            port=LAVALINK_PORT,
+            identifier='misoyan',
+            password=LAVALINK_PASS,
+            secure=True
+        )
     except Exception as e:
         print(f"\x1b[1;38;2;255;127;0m[lavalink]\x1b[0m \x1b[31mfail to build node pipeline: \x1b[1;4;31m{e}\x1b[0m")
         
