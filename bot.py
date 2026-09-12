@@ -326,7 +326,7 @@ async def on_ready():
         print("\x1b[1;38;2;88;101;242m[discord - vc]\x1b[0m starting auto-reconnect process...")
 
 @bot.event
-async def on_lava_lyra_track_end(payload: lava_lyra.TrackEndEventPayload):
+async def on_lava_lyra_track_end(payload: lava_lyra.TrackEndEvent):
     """handles song transition workflows and queue loops natively via lava_lyra state machine"""
     player: lava_lyra.Player = payload.player
     if not player:
