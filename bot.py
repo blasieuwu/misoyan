@@ -936,7 +936,7 @@ async def play_file(interaction: discord.Interaction, attachment: discord.Attach
                             f.write(apic_frame.data)
                         has_extracted_cover = True
                         break
-            except Exception as metadata_error:
+            except Exception as e:
                 print(f"\x1b[1;38;2;29;185;84m[/play-file]\x1b[0m an error occured during extration of metadata tags: \x1b[1;4;31m{e}\x1b[0m")
 
         results = await wavelink.Playable.search(attachment.url)
