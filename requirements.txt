@@ -1,7 +1,0 @@
-discord.py
-PyNaCl
-davey
-lava-lyra
-yt-dlp
-mutagen
-typing_extensions
