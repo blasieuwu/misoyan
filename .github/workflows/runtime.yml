@@ -1,0 +1,45 @@
+name: node/typescript runtime
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  runtime-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v4.2.2
+
+      - name: set up node.js (v20)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: install dependencies
+        run: npm ci
+
+      - name: compile typescript
+        run: npm run build
+
+      - name: do a dry run check
+        run: |
+          # tests if node can evaluate the compiled bundle syntax without crashing
+          node -e "
+          try {
+            require('./dist/index.js');
+            console.log('oh it managed to compile and load correctly');
+          } catch (e) {
+            // if it fails due to missing bot tokens/login, runtime syntax is still valid
+            if (e.message.includes('TOKEN') || e.message.includes('DISCORD') || e.message.includes('An invalid token was provided')) {
+              console.log('bot tried to authenticate (ofc it cant). works tho');
+              process.exit(0);
+            } else {
+              console.error('ah shit it broke:', e);
+              process.exit(1);
+            }
+          }
+          "
