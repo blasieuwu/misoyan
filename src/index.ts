@@ -19,7 +19,14 @@ import {
   User,
   Guild,
   MessageFlags,
-  InteractionReplyOptions
+  InteractionReplyOptions,
+  TextDisplayBuilder,
+  MediaGalleryBuilder,
+  ContainerBuilder,
+  SectionBuilder,
+  ThumbnailBuilder,
+  SeparatorBuilder,
+  SeparatorSpacingSize,
 } from 'discord.js';
 import { Manager } from 'moonlink.js';
 import http from 'node:http';
@@ -125,23 +132,15 @@ export function createNowPlayingV2(track: any, user: User, extra: string = '', o
   const artistName = author && author !== 'Unknown Artist' ? author : 'local asset';
   const displayPrefix = uri.includes('discordapp.com') ? ' (file)' : extra;
 
-  const nowPlayingText = `-# now playing!${displayPrefix} - requested by ${userHandle} :3`;
-  const trackMetadataText = `## ${trackTitle}\nartist: **${artistName}**\nduration: ${duration}`;
+  const nowPlayingText = new TextDisplayBuilder()
+    .setContent(`-# now playing!${displayPrefix} - requested by ${userHandle} :3`);
+  const coverArt = new MediaGalleryBuilder()
+    .addItems({description: `cover art of track ${trackTitle}`, media: {url: trackCoverUrl}});
+  const trackMetadataText = new TextDisplayBuilder()
+    .setContent(`## ${trackTitle}\nartist: **${artistName}**\nduration: ${duration}`);
 
-  return {
-    flags: MessageFlags.IsComponentsV2 as any,
-    components: [
-      {
-        type: 1, // Container Component
-        accent_color: 0xe6ba81,
-        components: [
-          { type: 10, content: nowPlayingText },
-          { type: 11, items: [{ media: { url: trackCoverUrl } }] },
-          { type: 10, content: trackMetadataText }
-        ]
-      }
-    ] as any
-  };
+  const container = new ContainerBuilder().addTextDisplayComponents(nowPlayingText).addMediaGalleryComponents(coverArt).addTextDisplayComponents(trackMetadataText).setAccentColor(0xE6BA81);
+  return container as any
 }
 
 // 2. FilePlayingView -> createFilePlayingV2
@@ -149,6 +148,7 @@ export function createFilePlayingV2(track: any, user: User, attachment: any, gui
   const userHandle = `@${user.username}`;
   const durationMs = track.info?.length || track.duration || track.length;
   const durationText = durationMs && durationMs > 0 ? formatDuration(durationMs) : '00:00';
+  const container = new ContainerBuilder({});
 
   const topText = `-# now playing! (file) - requested by ${userHandle} :3\n## ${attachment.name || attachment.filename}\nduration: ${durationText}`;
   
@@ -163,13 +163,10 @@ export function createFilePlayingV2(track: any, user: User, attachment: any, gui
     displayThumbnail = track.info?.artwork || track.artwork;
   }
 
-  const layoutComponents: any[] = [
-    {
-      type: 9, // Section Component
-      components: [{ type: 10, content: topText }],
-      accessory: { type: 11, items: [{ media: { url: displayThumbnail } }] } 
-    }
-  ];
+  const topSection = new SectionBuilder({})
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(topText))
+    .setThumbnailAccessory(new ThumbnailBuilder().setURL(displayThumbnail));
+  container.addSectionComponents(topSection);
 
   const trackTitle = track.info?.title || track.title;
   const trackAuthor = track.info?.author || track.author;
@@ -180,23 +177,12 @@ export function createFilePlayingV2(track: any, user: User, attachment: any, gui
     const metaTitle = hasTitle ? trackTitle : 'unknown title';
     const metaArtist = hasAuthor ? trackAuthor : 'unknown artist';
     
-    layoutComponents.push({ type: 12 }); // Separator Component
-    layoutComponents.push({
-      type: 10, // Text Display Component
-      content: `## ${metaTitle}\nartist: **${metaArtist}**`
-    });
+    container.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small))
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent(`## ${metaTitle}\nartist: **${metaArtist}**`));
   }
 
-  return {
-    flags: MessageFlags.IsComponentsV2 as any,
-    components: [
-      {
-        type: 1, // Container
-        accent_color: 0xf9c788,
-        components: layoutComponents
-      }
-    ] as any
-  };
+  container.setAccentColor(0xF9C788)
+  return container as any
 }
 
 // 3. QueuePopup -> createQueuePopupV2
@@ -215,23 +201,14 @@ export function createQueuePopupV2(track: any, user: User, queueMessage: string,
   const trackTitle = track.info?.title || track.title || 'Unknown Title';
 
   const textMetadata = `-# requested by ${userHandle} :3\n${queueMessage}\n# ${trackTitle}\nartist: **${artistName}**\nduration: ${duration}${indexStr}`;
-
-  return {
-    flags: MessageFlags.IsComponentsV2 as any,
-    components: [
-      {
-        type: 1,
-        accent_color: 0x5c9f05,
-        components: [
-          {
-            type: 9, // Section Component
-            components: [{ type: 10, content: textMetadata }],
-            accessory: { type: 11, items: [{ media: { url: trackCoverUrl } }] }
-          }
-        ]
-      }
-    ] as any
-  };
+  
+  const section = new SectionBuilder()
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(textMetadata))
+    .setThumbnailAccessory(new ThumbnailBuilder().setURL(trackCoverUrl))
+  
+  const container = new ContainerBuilder()
+    .addSectionComponents(section)
+  return container as any
 }
 
 // 4. LoopStatusView -> createLoopStatusV2
@@ -275,6 +252,7 @@ export function createLoopStatusV2(mode: 'current' | 'queue' | 'off', track: any
   };
 }
 
+// 5. QueuePopup
 export function createSongQueueV2(player: any, user: User): InteractionReplyOptions {
   const queueSections: any[] = [];
 
