@@ -79,7 +79,7 @@ const manager = new Manager({
       port: LAVALINK_PORT,
       password: LAVALINK_PASS,
       secure: LAVALINK_SECURE,
-      identifier: 'misoyan'
+      identifier: 'the-vhs-tape'
     }
   ],
   send: (guildId: string, sPayload: any) => {
@@ -155,7 +155,7 @@ function createQueuePopupV2(track: any, user: User, queueMessage: string, positi
   const artistName = track.info?.author || track.author || 'unknown';
   const trackTitle = track.info?.title || track.title || 'Unknown Title';
 
-  const textMetadata = `- # requested by ${userHandle} :3\n${queueMessage}\n# ${trackTitle}\nartist: **${artistName}**\nduration: ${duration}${indexStr}`;
+  const textMetadata = `- # requested by ${userHandle}\n${queueMessage}\n# ${trackTitle}\nartist: **${artistName}**\nduration: ${duration}${indexStr}`;
 
   return {
     flags: MessageFlags.IsComponentsV2 as any,
@@ -469,24 +469,24 @@ client.on('ready', async () => {
   // register slash commands
   const commands = [
     new SlashCommandBuilder().setName('afk').setDescription("tell people you're busy").addStringOption((o) => o.setName('reason').setDescription("why you're away")),
-    new SlashCommandBuilder().setName('ping').setDescription("check misoyan's reflexes"),
-    new SlashCommandBuilder().setName('join').setDescription('i wanna join the vc :3'),
-    new SlashCommandBuilder().setName('leave').setDescription('pls let me go :c'),
-    new SlashCommandBuilder().setName('play').setDescription('use my speakers :3').addStringOption((o) => o.setName('search').setDescription('the title or link').setRequired(true)).addStringOption((o) => o.setName('timing').setDescription('queue priority').addChoices({ name: 'add to queue (default)', value: 'queue' }, { name: 'play next', value: 'next' }, { name: 'replace current track', value: 'replace' })),
+    new SlashCommandBuilder().setName('ping').setDescription("how fast can the vhs tape play"),
+    new SlashCommandBuilder().setName('join').setDescription('summons the vhs tape player'),
+    new SlashCommandBuilder().setName('leave').setDescription('stop the vhs tape player'),
+    new SlashCommandBuilder().setName('play').setDescription('use the player').addStringOption((o) => o.setName('search').setDescription('the title or link').setRequired(true)).addStringOption((o) => o.setName('timing').setDescription('queue priority').addChoices({ name: 'add to queue (default)', value: 'queue' }, { name: 'play next', value: 'next' }, { name: 'replace current track', value: 'replace' })),
     new SlashCommandBuilder().setName('now-playing').setDescription('see what track is currently playing'),
     new SlashCommandBuilder().setName('playback').setDescription('pause or unpause the current music playback'),
-    new SlashCommandBuilder().setName('skip').setDescription("skip this track if it's bad bleh"),
-    new SlashCommandBuilder().setName('previous').setDescription('play the previous song if you like it :3'),
+    new SlashCommandBuilder().setName('skip').setDescription("advances to the next track"),
+    new SlashCommandBuilder().setName('previous').setDescription('plays the previous song'),
     new SlashCommandBuilder().setName('replay').setDescription('restart the current song from the beginning'),
     new SlashCommandBuilder().setName('queue').setDescription('see what songs are lined up next'),
     new SlashCommandBuilder().setName('loop').setDescription('change the loop mode for the player').addStringOption((o) => o.setName('mode').setDescription('loop target').setRequired(true).addChoices({ name: 'current song', value: 'current' }, { name: 'queue', value: 'queue' }, { name: 'off', value: 'off' })),
-    new SlashCommandBuilder().setName('status').setDescription('check out my internal self :d'),
+    new SlashCommandBuilder().setName('status').setDescription('internal data'),
     new SlashCommandBuilder().setName('timer').setDescription('set a timer').addStringOption((o) => o.setName('duration').setDescription('ex: 1h 30m').setRequired(true)).addStringOption((o) => o.setName('message').setDescription('what to remind you of')),
-    new SlashCommandBuilder().setName('suicide').setDescription('[blasie-only] completely kills misoyan.'),
-    new SlashCommandBuilder().setName('say').setDescription('[admin/owner] make misoyan speak :d').addStringOption((o) => o.setName('message').setDescription('text to send').setRequired(true)),
-    new SlashCommandBuilder().setName('settings').setDescription('[admin/owner] change my internal organs :3'),
-    new SlashCommandBuilder().setName('restrict').setDescription("[admin/owner] don't end up in this list.").addUserOption((o) => o.setName('target').setDescription('target user').setRequired(true)),
-    new SlashCommandBuilder().setName('webhook').setDescription('[blasie-only] create a new webhook :o').addStringOption((o) => o.setName('message').setDescription('webhook name'))
+    new SlashCommandBuilder().setName('suicide').setDescription('[blasie-only] ends the process.'),
+    new SlashCommandBuilder().setName('say').setDescription('[admin/owner] make the vhs tape say something').addStringOption((o) => o.setName('message').setDescription('text to send').setRequired(true)),
+    new SlashCommandBuilder().setName('settings').setDescription('[admin/owner] configure settings'),
+    new SlashCommandBuilder().setName('restrict').setDescription("[admin/owner] prevents interactions with the vhs tape").addUserOption((o) => o.setName('target').setDescription('target user').setRequired(true)),
+    new SlashCommandBuilder().setName('webhook').setDescription('[blasie-only] create a new webhook').addStringOption((o) => o.setName('message').setDescription('webhook name'))
   ];
 
   const rest = new REST().setToken(BOT_TOKEN);
