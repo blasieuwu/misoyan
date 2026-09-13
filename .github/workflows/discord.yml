@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     if: "!contains(github.event.head_commit.message, '--workflow-off')"
     steps:
-      - name: send discord message
+      - name: send discord message | discord-webhook@v1.0.0
         env:
           ACTOR: ${{ github.actor }}
           REPO_FULL: ${{ github.repository }}
