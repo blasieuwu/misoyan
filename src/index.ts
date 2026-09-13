@@ -42,13 +42,12 @@ const LAVALINK_SECURE = ['true', '1', 'yes'].includes((process.env.LAVALINK_SECU
 
 let targetVoiceChannelId = '123456789012345678';
 
-const misoyanSettings = {
+const vhsSettings = {
   allFeatures: true,
   vcJoining: true,
   vcLeaving: true,
   statusChanges: true,
   statusChangeDelay: false,
-  fihReplies: false,
   needReconnection: false,
   isConnecting: false,
   blacklist: new Set<string>()
@@ -98,7 +97,7 @@ function formatDuration(ms?: number | null): string {
 }
 
 // ==========================================
-// COMPONENTS V2 LAYOUT VIEWS (bot.py port)
+// COMPONENTS V2 LAYOUT VIEWS (vhs theme)
 // ==========================================
 
 // 1. NowPlayingView (Components V2)
@@ -123,14 +122,14 @@ function createNowPlayingV2(track: any, user: User, extra: string = '', override
   const artistName = author && author !== 'Unknown Artist' ? author : 'local asset';
   const displayPrefix = track.info?.uri?.includes('discordapp.com') ? ' (file)' : extra;
 
-  const contentText = `- # now playing!${displayPrefix} - requested by ${userHandle} :3\n## ${trackTitle}\nartist: **${artistName}**\nduration: ${duration}`;
+  const contentText = `- # now playing tape!${displayPrefix} - spooled by ${userHandle} 📼\n## ${trackTitle}\nartist: **${artistName}**\nduration: ${duration}`;
 
   return {
     flags: MessageFlags.IsComponentsV2 as any,
     components: [
       {
         type: 1, // Container Component
-        accent_color: 0xe6ba81,
+        accent_color: 0x111111,
         components: [
           {
             type: 10, // Text Display Component
@@ -155,14 +154,14 @@ function createQueuePopupV2(track: any, user: User, queueMessage: string, positi
   const artistName = track.info?.author || track.author || 'unknown';
   const trackTitle = track.info?.title || track.title || 'Unknown Title';
 
-  const textMetadata = `- # requested by ${userHandle}\n${queueMessage}\n# ${trackTitle}\nartist: **${artistName}**\nduration: ${duration}${indexStr}`;
+  const textMetadata = `- # spooled by ${userHandle}\n${queueMessage}\n# ${trackTitle}\nartist: **${artistName}**\nduration: ${duration}${indexStr}`;
 
   return {
     flags: MessageFlags.IsComponentsV2 as any,
     components: [
       {
         type: 1, // Container Component
-        accent_color: 0x5c9f05,
+        accent_color: 0x2c2c2c,
         components: [
           {
             type: 9, // Section Component
@@ -241,7 +240,7 @@ function createSongQueueV2(player: any, user: User): InteractionReplyOptions {
     components: [
       {
         type: 1, // Container Component
-        accent_color: 0x2c2c2c,
+        accent_color: 0x111111,
         components: containerComponents
       }
     ] as any
@@ -253,18 +252,18 @@ function createLoopStatusV2(mode: 'current' | 'queue' | 'off', track: any, user:
   const userHandle = `@${user.username}`;
   let thumbnailUrl = user.displayAvatarURL();
   let cardText = '';
-  let accent = 0xff0000;
+  let accent = 0x111111;
 
   if (mode === 'current') {
     thumbnailUrl = track?.info?.artworkUrl || track?.artworkUrl || 'https://placehold.co/240x240/eaeaea/969696.png?text=no+cover';
-    cardText = `- # requested by ${userHandle}\n### loop: current song\nthe current song will now loop forever :3`;
-    accent = 0x5c9f05;
+    cardText = `- # spooled by ${userHandle}\n### tape loop: current track\nlooping current track continuously 📼`;
+    accent = 0x333333;
   } else if (mode === 'queue') {
-    cardText = `- # requested by ${userHandle}\n### loop: queue\nthe entire queue will now loop :o`;
-    accent = 0x85c2f0;
+    cardText = `- # spooled by ${userHandle}\n### tape loop: full spool\nlooping entire tape queue 🔄`;
+    accent = 0x222222;
   } else {
-    cardText = `- # requested by ${userHandle}\n### loop: off\nloop has been turned off :p`;
-    accent = 0xff0000;
+    cardText = `- # spooled by ${userHandle}\n### tape loop: off\nloop mechanism disengaged ⏹️`;
+    accent = 0x111111;
   }
 
   return {
@@ -293,46 +292,12 @@ function createLoopStatusV2(mode: 'current' | 'queue' | 'off', track: any, user:
   };
 }
 
-// reply list & status pool
-const replyList = [
-  'fih fih fih',
-  'who pinged',
-  'you like fih?',
-  'did someone call my name?',
-  'fih :3',
-  'please do the fih',
-  'i loveeee fih',
-  'hello :d',
-  'the fih gods are watching us',
-  'https://tenor.com/view/spinning-fish-gif-11746948154213447163',
-  'https://tenor.com/view/upside-down-spinning-fish-long-sticker-gif-14191013706827067344',
-  'https://tenor.com/view/pog-gif-14149886028736974766',
-  'https://tenor.com/view/silly-cat-doodle-fish-nibble-cat-eating-fish-gif-15126373179558858541',
-  'https://tenor.com/view/screaming-fish-fish-fish-finger-gif-9883040399517041611',
-  'https://tenor.com/view/kiracord-fish-gif-22855500',
-  'https://tenor.com/view/cat-cat-pufferfish-pufferfish-cat-fish-catfish-gif-9997139051265883971',
-  'praise fih',
-  'killer fish from san diego',
-  'fih party',
-  'spinning fish',
-  'me and fih :3',
-  '🐟',
-  'im in your walls :d'
-];
-
 const statusPool: { status: PresenceStatusData; name: string }[] = [
-  { status: 'online', name: 'hanging out in the vc :3' },
-  { status: 'idle', name: 'waiting for someone to join :c' },
-  { status: 'dnd', name: 'learning new stuff...' },
-  { status: 'invisible', name: 'lurking...' },
-  { status: 'online', name: 'yapping in yappanese bleh' },
-  { status: 'idle', name: 'waiting for someone to call my name :c' },
-  { status: 'dnd', name: 'please do the fih' },
-  { status: 'invisible', name: 'sleeping... zzz' },
-  { status: 'dnd', name: 'planning next stream' },
-  { status: 'idle', name: 'bored as hell' },
-  { status: 'online', name: 'hanging out on stream' },
-  { status: 'dnd', name: "i'm lurking in your walls :3" }
+  { status: 'online', name: 'spinning tapes in the vc 📼' },
+  { status: 'idle', name: 'waiting for a deck assignment...' },
+  { status: 'dnd', name: 'calibrating audio heads...' },
+  { status: 'invisible', name: 'rewinding...' },
+  { status: 'online', name: 'hi-fi audio mode active' }
 ];
 
 // keepalive server
@@ -340,11 +305,11 @@ function startWebServer() {
   const server = http.createServer((req: http.IncomingMessage, res: http.ServerResponse) => {
     if (!client.isReady()) {
       res.writeHead(503, { 'Content-Type': 'text/plain' });
-      res.end('bot is offline or unready :c');
+      res.end('deck offline :c');
       return;
     }
     res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('fih fih fih :3');
+    res.end('vhs tape deck online 📼');
   });
 
   server.listen(parseInt(PORT, 10), '0.0.0.0', () => {
@@ -355,20 +320,19 @@ function startWebServer() {
 // settings dashboard builder
 function generateDashboard() {
   const embed = new EmbedBuilder()
-    .setTitle('the command block')
-    .setDescription('my internal organs :3')
-    .setColor(0xffcc80)
+    .setTitle('vhs control panel')
+    .setDescription('deck hardware parameters 📼')
+    .setColor(0x111111)
     .setThumbnail(client.user?.displayAvatarURL() || null)
     .addFields(
-      { name: 'all features: ', value: `state: \`${misoyanSettings.allFeatures ? 'on' : 'off'}\``, inline: false },
-      { name: 'vc joining', value: `state: \`${misoyanSettings.vcJoining ? 'active' : 'disabled'}\``, inline: true },
-      { name: 'vc leaving', value: `state: \`${misoyanSettings.vcLeaving ? 'active' : 'disabled'}\``, inline: true },
-      { name: 'voicelines', value: `state: \`${misoyanSettings.fihReplies ? 'listening' : 'muted'}\``, inline: true },
-      { name: 'status changes', value: `state: \`${misoyanSettings.statusChanges ? 'cycling' : 'frozen'}\``, inline: true },
-      { name: 'cycle frequency', value: `state: \`${misoyanSettings.statusChangeDelay ? 'fast layout mode (1m)' : 'normal engine rate (2.5m)'}\``, inline: true },
+      { name: 'all features: ', value: `state: \`${vhsSettings.allFeatures ? 'on' : 'off'}\``, inline: false },
+      { name: 'vc joining', value: `state: \`${vhsSettings.vcJoining ? 'active' : 'disabled'}\``, inline: true },
+      { name: 'vc leaving', value: `state: \`${vhsSettings.vcLeaving ? 'active' : 'disabled'}\``, inline: true },
+      { name: 'status changes', value: `state: \`${vhsSettings.statusChanges ? 'cycling' : 'frozen'}\``, inline: true },
+      { name: 'cycle frequency', value: `state: \`${vhsSettings.statusChangeDelay ? 'fast mode (1m)' : 'normal rate (2.5m)'}\``, inline: true },
       {
-        name: 'blacklisted people',
-        value: misoyanSettings.blacklist.size > 0 ? Array.from(misoyanSettings.blacklist).map((id) => `<@${id}>`).join(', ') : 'none',
+        name: 'blacklisted users',
+        value: vhsSettings.blacklist.size > 0 ? Array.from(vhsSettings.blacklist).map((id) => `<@${id}>`).join(', ') : 'none',
         inline: false
       }
     );
@@ -376,34 +340,30 @@ function generateDashboard() {
   const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId('m_all')
-      .setLabel(`all: ${misoyanSettings.allFeatures ? 'on' : 'off'}`)
-      .setStyle(misoyanSettings.allFeatures ? ButtonStyle.Primary : ButtonStyle.Secondary),
+      .setLabel(`all: ${vhsSettings.allFeatures ? 'on' : 'off'}`)
+      .setStyle(vhsSettings.allFeatures ? ButtonStyle.Primary : ButtonStyle.Secondary),
     new ButtonBuilder()
-      .setCustomId('m_fih')
-      .setLabel(`voicelines: ${misoyanSettings.fihReplies ? 'on' : 'off'}`)
-      .setStyle(misoyanSettings.fihReplies ? ButtonStyle.Primary : ButtonStyle.Secondary)
+      .setCustomId('m_join')
+      .setLabel(`vc join: ${vhsSettings.vcJoining ? 'on' : 'off'}`)
+      .setStyle(vhsSettings.vcJoining ? ButtonStyle.Primary : ButtonStyle.Secondary)
   );
 
   const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
-      .setCustomId('m_join')
-      .setLabel(`vc join: ${misoyanSettings.vcJoining ? 'on' : 'off'}`)
-      .setStyle(misoyanSettings.vcJoining ? ButtonStyle.Primary : ButtonStyle.Secondary),
-    new ButtonBuilder()
       .setCustomId('m_leave')
-      .setLabel(`vc leave: ${misoyanSettings.vcLeaving ? 'on' : 'off'}`)
-      .setStyle(misoyanSettings.vcLeaving ? ButtonStyle.Primary : ButtonStyle.Secondary)
+      .setLabel(`vc leave: ${vhsSettings.vcLeaving ? 'on' : 'off'}`)
+      .setStyle(vhsSettings.vcLeaving ? ButtonStyle.Primary : ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('m_status')
+      .setLabel(`statuses: ${vhsSettings.statusChanges ? 'on' : 'off'}`)
+      .setStyle(vhsSettings.statusChanges ? ButtonStyle.Primary : ButtonStyle.Secondary)
   );
 
   const row3 = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
-      .setCustomId('m_status')
-      .setLabel(`statuses: ${misoyanSettings.statusChanges ? 'on' : 'off'}`)
-      .setStyle(misoyanSettings.statusChanges ? ButtonStyle.Primary : ButtonStyle.Secondary),
-    new ButtonBuilder()
       .setCustomId('m_delay')
-      .setLabel(`cycle rate: ${misoyanSettings.statusChangeDelay ? 'fast (1m)' : 'normal (2.5m)'}`)
-      .setStyle(misoyanSettings.statusChangeDelay ? ButtonStyle.Primary : ButtonStyle.Secondary)
+      .setLabel(`cycle rate: ${vhsSettings.statusChangeDelay ? 'fast (1m)' : 'normal (2.5m)'}`)
+      .setStyle(vhsSettings.statusChangeDelay ? ButtonStyle.Primary : ButtonStyle.Secondary)
   );
 
   return { embeds: [embed], components: [row1, row2, row3] };
@@ -412,14 +372,14 @@ function generateDashboard() {
 // status rotation loop
 function startStatusLoop() {
   const run = () => {
-    if (misoyanSettings.allFeatures && misoyanSettings.statusChanges && client.user) {
+    if (vhsSettings.allFeatures && vhsSettings.statusChanges && client.user) {
       const target = statusPool[Math.floor(Math.random() * statusPool.length)];
       client.user.setPresence({
         status: target.status,
         activities: [{ name: target.name, type: ActivityType.Custom }]
       });
     }
-    const interval = misoyanSettings.statusChangeDelay ? 60000 : 150000;
+    const interval = vhsSettings.statusChangeDelay ? 60000 : 150000;
     setTimeout(run, interval);
   };
   run();
@@ -427,8 +387,8 @@ function startStatusLoop() {
 
 // voice sentinel loop
 setInterval(async () => {
-  if (!misoyanSettings.allFeatures || !misoyanSettings.vcJoining) return;
-  if (misoyanSettings.isConnecting) return;
+  if (!vhsSettings.allFeatures || !vhsSettings.vcJoining) return;
+  if (vhsSettings.isConnecting) return;
 
   const channel = client.channels.cache.get(targetVoiceChannelId) as VoiceChannel;
   if (!channel || !channel.isVoiceBased()) return;
@@ -436,10 +396,10 @@ setInterval(async () => {
   const player = manager.players.get(channel.guild.id);
   const isDisconnected = !player || !player.connected;
 
-  if (isDisconnected || misoyanSettings.needReconnection) {
-    misoyanSettings.needReconnection = false;
-    misoyanSettings.isConnecting = true;
-    console.log('\x1b[1;38;2;88;101;242m[discord - vc]\x1b[0m a disconnection has occured & will attempt to reconnect.');
+  if (isDisconnected || vhsSettings.needReconnection) {
+    vhsSettings.needReconnection = false;
+    vhsSettings.isConnecting = true;
+    console.log('\x1b[1;38;2;88;101;242m[discord - vc]\x1b[0m analog connection dropped. reseating deck.');
 
     try {
       if (player) player.destroy();
@@ -450,49 +410,52 @@ setInterval(async () => {
         autoPlay: true
       });
       await newPlayer.connect();
-      console.log('\x1b[1;38;2;88;101;242m[discord - vc]\x1b[0m connection reestablished');
+      console.log('\x1b[1;38;2;88;101;242m[discord - vc]\x1b[0m deck connection reestablished');
     } catch (e) {
-      console.log(`\x1b[1;38;2;88;101;242m[discord - vc]\x1b[0m \x1b[31man error occured while reconnecting: \x1b[1;4;31m${e}\x1b[0m`);
+      console.log(`\x1b[1;38;2;88;101;242m[discord - vc]\x1b[0m \x1b[31merror reseating deck: \x1b[1;4;31m${e}\x1b[0m`);
     } finally {
-      misoyanSettings.isConnecting = false;
+      vhsSettings.isConnecting = false;
     }
   }
 }, 15000);
 
 // event handlers
 client.on('ready', async () => {
-  console.log(`\x1b[1;38;2;88;101;242m[discord - sign-in]\x1b[0m signing in as \x1b[1m${client.user?.tag}\x1b[0m`);
+  console.log(`\x1b[1;38;2;88;101;242m[discord - sign-in]\x1b[0m signed in as \x1b[1m${client.user?.tag}\x1b[0m`);
   startWebServer();
   manager.init(client.user!.id);
+
+  console.log(`\x1b[1;38;2;88;101;242m[discord - sign-in]\x1b[0m starting status rotation.`)
   startStatusLoop();
 
-  // register slash commands
+  // register slash commands (including the new audio filter option!)
   const commands = [
     new SlashCommandBuilder().setName('afk').setDescription("tell people you're busy").addStringOption((o) => o.setName('reason').setDescription("why you're away")),
-    new SlashCommandBuilder().setName('ping').setDescription("how fast can the vhs tape play"),
+    new SlashCommandBuilder().setName('ping').setDescription("check vhs head tracking latency"),
     new SlashCommandBuilder().setName('join').setDescription('summons the vhs tape player'),
-    new SlashCommandBuilder().setName('leave').setDescription('stop the vhs tape player'),
-    new SlashCommandBuilder().setName('play').setDescription('use the player').addStringOption((o) => o.setName('search').setDescription('the title or link').setRequired(true)).addStringOption((o) => o.setName('timing').setDescription('queue priority').addChoices({ name: 'add to queue (default)', value: 'queue' }, { name: 'play next', value: 'next' }, { name: 'replace current track', value: 'replace' })),
+    new SlashCommandBuilder().setName('leave').setDescription('ejects the vhs tape player'),
+    new SlashCommandBuilder().setName('play').setDescription('spool up a track').addStringOption((o) => o.setName('search').setDescription('the title or link').setRequired(true)).addStringOption((o) => o.setName('timing').setDescription('queue priority').addChoices({ name: 'add to queue (default)', value: 'queue' }, { name: 'play next', value: 'next' }, { name: 'replace current track', value: 'replace' })),
     new SlashCommandBuilder().setName('now-playing').setDescription('see what track is currently playing'),
-    new SlashCommandBuilder().setName('playback').setDescription('pause or unpause the current music playback'),
-    new SlashCommandBuilder().setName('skip').setDescription("advances to the next track"),
-    new SlashCommandBuilder().setName('previous').setDescription('plays the previous song'),
-    new SlashCommandBuilder().setName('replay').setDescription('restart the current song from the beginning'),
-    new SlashCommandBuilder().setName('queue').setDescription('see what songs are lined up next'),
+    new SlashCommandBuilder().setName('playback').setDescription('pause or resume the tape playback'),
+    new SlashCommandBuilder().setName('skip').setDescription("fast forward to the next track"),
+    new SlashCommandBuilder().setName('previous').setDescription('rewind to the previous track'),
+    new SlashCommandBuilder().setName('replay').setDescription('restart the current track from the beginning'),
+    new SlashCommandBuilder().setName('queue').setDescription('see what tracks are lined up next'),
     new SlashCommandBuilder().setName('loop').setDescription('change the loop mode for the player').addStringOption((o) => o.setName('mode').setDescription('loop target').setRequired(true).addChoices({ name: 'current song', value: 'current' }, { name: 'queue', value: 'queue' }, { name: 'off', value: 'off' })),
-    new SlashCommandBuilder().setName('status').setDescription('internal data'),
-    new SlashCommandBuilder().setName('timer').setDescription('set a timer').addStringOption((o) => o.setName('duration').setDescription('ex: 1h 30m').setRequired(true)).addStringOption((o) => o.setName('message').setDescription('what to remind you of')),
-    new SlashCommandBuilder().setName('suicide').setDescription('[blasie-only] ends the process.'),
-    new SlashCommandBuilder().setName('say').setDescription('[admin/owner] make the vhs tape say something').addStringOption((o) => o.setName('message').setDescription('text to send').setRequired(true)),
-    new SlashCommandBuilder().setName('settings').setDescription('[admin/owner] configure settings'),
-    new SlashCommandBuilder().setName('restrict').setDescription("[admin/owner] prevents interactions with the vhs tape").addUserOption((o) => o.setName('target').setDescription('target user').setRequired(true)),
-    new SlashCommandBuilder().setName('webhook').setDescription('[blasie-only] create a new webhook').addStringOption((o) => o.setName('message').setDescription('webhook name'))
+    new SlashCommandBuilder().setName('filter').setDescription('adjust analog tape tracking filters').addStringOption((o) => o.setName('type').setDescription('filter preset').setRequired(true).addChoices({ name: 'vaporwave', value: 'vaporwave' }, { name: 'nightcore', value: 'nightcore' }, { name: 'clear', value: 'clear' })),
+    new SlashCommandBuilder().setName('status').setDescription('deck internal diagnostics'),
+    new SlashCommandBuilder().setName('timer').setDescription('set a reminder timer').addStringOption((o) => o.setName('duration').setDescription('ex: 1h 30m').setRequired(true)).addStringOption((o) => o.setName('message').setDescription('what to remind you of')),
+    new SlashCommandBuilder().setName('suicide').setDescription('[blasie-only] cuts power to the process.'),
+    new SlashCommandBuilder().setName('say').setDescription('[admin/owner] broadcast text through the deck').addStringOption((o) => o.setName('message').setDescription('text to send').setRequired(true)),
+    new SlashCommandBuilder().setName('settings').setDescription('[admin/owner] configure hardware settings'),
+    new SlashCommandBuilder().setName('restrict').setDescription("[admin/owner] block a user from touching the deck").addUserOption((o) => o.setName('target').setDescription('target user').setRequired(true)),
+    new SlashCommandBuilder().setName('webhook').setDescription('[blasie-only] create an operational webhook').addStringOption((o) => o.setName('message').setDescription('webhook name')),
   ];
 
   const rest = new REST().setToken(BOT_TOKEN);
   try {
     await rest.put(Routes.applicationCommands(client.user!.id), { body: commands });
-    console.log('\x1b[1;38;2;88;101;242m[discord - commands]\x1b[0m commands were synchronized.');
+    console.log('\x1b[1;38;2;88;101;242m[discord - commands]\x1b[0m commands synchronized successfully.');
   } catch (e) {
     console.error('failed to sync commands:', e);
   }
@@ -503,16 +466,17 @@ client.on('raw', (data: any) => {
 });
 
 manager.on('nodeCreate', (node: any) => {
-  console.log(`\x1b[1;32m[lavalink] node '${node.identifier}' is ready!\x1b[0m`);
+  console.log(`\x1b[1;32m[vhs] deck '${node.identifier}' is powered on and tracking!\x1b[0m`);
 });
 
 client.on('voiceStateUpdate', (oldState: VoiceState, newState: VoiceState) => {
   if (oldState.member?.id !== client.user?.id) return;
 
   if (oldState.channelId === targetVoiceChannelId && newState.channelId !== targetVoiceChannelId) {
-    console.log('\x1b[1;38;2;88;101;242m[discord - vc]\x1b[0m a disconnection has occured & will attempt to reconnect.');
-    if (misoyanSettings.allFeatures && misoyanSettings.vcJoining && !misoyanSettings.isConnecting) {
-      misoyanSettings.needReconnection = true;
+    console.log('\x1b[1;38;2;88;101;242m[discord - vc]\x1b[0m analog connection lost. attempting to reseat tape.');
+
+    if (vhsSettings.allFeatures && vhsSettings.vcJoining && !vhsSettings.isConnecting) {
+      vhsSettings.needReconnection = true;
     }
   }
 });
@@ -520,7 +484,7 @@ client.on('voiceStateUpdate', (oldState: VoiceState, newState: VoiceState) => {
 client.on('messageCreate', async (message: Message) => {
   if (message.author.bot) return;
 
-  // afk check
+  // afk check remains intact
   if (afkUsers.has(message.author.id)) {
     const data = afkUsers.get(message.author.id)!;
     afkUsers.delete(message.author.id);
@@ -529,6 +493,7 @@ client.on('messageCreate', async (message: Message) => {
     } catch {}
     if (message.channel && 'send' in message.channel) {
       await (message.channel as TextChannel).send(`welcome back, ${message.author}. you're no longer afk.`);
+      console.log(`\x1b[1;38;2;88;101;242m[discord - messages]\x1b[0m user ${message.author} is no longer afk.`);
     }
   }
 
@@ -536,17 +501,10 @@ client.on('messageCreate', async (message: Message) => {
     if (afkUsers.has(user.id)) {
       const data = afkUsers.get(user.id)!;
       if (message.channel && 'send' in message.channel) {
-        await (message.channel as TextChannel).send(`hey, ${user.username}'s afk.\n~> reason: '*${data.reason}*'`);
+        await (message.channel as TextChannel).send(`hey, ${user.username} is currently afk.\n~> reason: '*${data.reason}*'`);
+        console.log(`\x1b[1;38;2;88;101;242m[discord - messages]\x1b[0m afk user ${user.username} was mentioned.`);
       }
     }
-  }
-
-  if (!misoyanSettings.allFeatures || misoyanSettings.blacklist.has(message.author.id)) return;
-  if (!misoyanSettings.fihReplies) return;
-
-  if (message.content.toLowerCase().includes('misoyan') || message.mentions.has(client.user!)) {
-    const reply = replyList[Math.floor(Math.random() * replyList.length)];
-    await message.reply({ content: reply, allowedMentions: { parse: [] } }).catch(() => {});
   }
 });
 
@@ -555,12 +513,11 @@ client.on('interactionCreate', async (interaction: Interaction) => {
   if (interaction.isButton()) {
     if (!['m_all', 'm_fih', 'm_join', 'm_leave', 'm_status', 'm_delay'].includes(interaction.customId)) return;
 
-    if (interaction.customId === 'm_all') misoyanSettings.allFeatures = !misoyanSettings.allFeatures;
-    if (interaction.customId === 'm_fih') misoyanSettings.fihReplies = !misoyanSettings.fihReplies;
-    if (interaction.customId === 'm_join') misoyanSettings.vcJoining = !misoyanSettings.vcJoining;
-    if (interaction.customId === 'm_leave') misoyanSettings.vcLeaving = !misoyanSettings.vcLeaving;
-    if (interaction.customId === 'm_status') misoyanSettings.statusChanges = !misoyanSettings.statusChanges;
-    if (interaction.customId === 'm_delay') misoyanSettings.statusChangeDelay = !misoyanSettings.statusChangeDelay;
+    if (interaction.customId === 'm_all') vhsSettings.allFeatures = !vhsSettings.allFeatures;
+    if (interaction.customId === 'm_join') vhsSettings.vcJoining = !vhsSettings.vcJoining;
+    if (interaction.customId === 'm_leave') vhsSettings.vcLeaving = !vhsSettings.vcLeaving;
+    if (interaction.customId === 'm_status') vhsSettings.statusChanges = !vhsSettings.statusChanges;
+    if (interaction.customId === 'm_delay') vhsSettings.statusChangeDelay = !vhsSettings.statusChangeDelay;
 
     await interaction.update(generateDashboard());
     return;
@@ -570,75 +527,12 @@ client.on('interactionCreate', async (interaction: Interaction) => {
 
   const { commandName, options, member, guild, user } = interaction;
 
-  if (commandName === 'afk') {
-    const reason = options.getString('reason') || 'busy :3';
-    const guildMember = member as GuildMember;
-    const originalNick = guildMember?.nickname || user.username;
-
-    afkUsers.set(user.id, { reason, originalNick });
-
-    try {
-      let newNick = `[afk] ${originalNick}`;
-      if (newNick.length > 32) newNick = newNick.slice(0, 32);
-      await guildMember.setNickname(newNick);
-    } catch {}
-
-    await interaction.reply({ content: `ok, you're afk with reason: '*${reason}*'`, ephemeral: true });
-  }
-
-  if (commandName === 'ping') {
-    await interaction.reply(`i'm not playing ping pong. (\`${client.ws.ping}ms\`)`);
-  }
-
-  if (commandName === 'join') {
-    if (!misoyanSettings.allFeatures || !misoyanSettings.vcJoining) {
-      return interaction.reply({ content: 'nah, too busy rn (disabled)', ephemeral: true });
-    }
-
-    const voiceChannel = (member as GuildMember)?.voice?.channel;
-    if (!voiceChannel) {
-      return interaction.reply({ content: 'get in a voice channel you dummy!', ephemeral: true });
-    }
-
-    targetVoiceChannelId = voiceChannel.id;
-    await interaction.deferReply();
-
-    let player = manager.players.get(guild!.id);
-    if (!player) {
-      player = manager.players.create({
-        guildId: guild!.id,
-        voiceChannelId: voiceChannel.id,
-        textChannelId: interaction.channelId,
-        autoPlay: true
-      });
-    }
-
-    await player.connect();
-    misoyanSettings.needReconnection = false;
-    await interaction.followUp('im in your vc now :d');
-  }
-
-  if (commandName === 'leave') {
-    if (!misoyanSettings.allFeatures || !misoyanSettings.vcLeaving) {
-      return interaction.reply({ content: 'you are not making me leave lmaooo (disabled)', ephemeral: true });
-    }
-
-    const player = manager.players.get(guild!.id);
-    if (player && player.connected) {
-      player.destroy();
-      misoyanSettings.needReconnection = false;
-      await interaction.reply({ content: 'i am free!! (yay :3)', ephemeral: true });
-    } else {
-      await interaction.reply({ content: 'you want me to leave...? im not connected to a vc', ephemeral: true });
-    }
-  }
-
   if (commandName === 'play') {
-    if (!misoyanSettings.allFeatures) return interaction.reply({ content: 'my speakers are off rn (disabled)', ephemeral: true });
-    if (misoyanSettings.blacklist.has(user.id)) return interaction.reply({ content: "hey, don't touch that.", ephemeral: true });
+    if (!vhsSettings.allFeatures) return interaction.reply({ content: 'deck power is off (disabled).', ephemeral: true });
+    if (vhsSettings.blacklist.has(user.id)) return interaction.reply({ content: "hands off the tape deck.", ephemeral: true });
 
     const voiceChannel = (member as GuildMember)?.voice?.channel;
-    if (!voiceChannel) return interaction.reply({ content: 'join a voice channel first, you dummy! i need an audience. :c', ephemeral: true });
+    if (!voiceChannel) return interaction.reply({ content: 'plug into a voice channel first.', ephemeral: true });
 
     const query = options.getString('search', true);
     const timing = options.getString('timing') || 'queue';
@@ -659,7 +553,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
 
     const res = await manager.search({ query, source: 'youtube' });
     if (!res || !res.tracks.length) {
-      return interaction.followUp({ content: "i couldn't find anything with that search query :c", ephemeral: true });
+      return interaction.followUp({ content: "static. couldn't find anything to track.", ephemeral: true });
     }
 
     const track = res.tracks[0];
@@ -667,81 +561,42 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     if (!player.playing && !player.paused) {
       player.queue.add(track);
       player.play();
-      const v2Payload = createNowPlayingV2(track, user);
-      return interaction.followUp(v2Payload);
+      console.log(`\x1b[1;38;2;10;15;35m[moonlink.js]\x1b[0m now playing ${player.current?.title}`);
+      return interaction.followUp(createNowPlayingV2(track, user));
     }
 
     if (timing === 'replace') {
       player.queue.add(track);
       player.skip();
-      const v2Payload = createNowPlayingV2(track, user, ' (replaced)');
-      return interaction.followUp(v2Payload);
+      console.log(`\x1b[1;38;2;10;15;35m[moonlink.js]\x1b[0m track replaced, now playing ${player.current?.title}`);
+      return interaction.followUp(createNowPlayingV2(track, user, ' (replaced)'));
     } else {
       player.queue.add(track);
       const queueTracks = player.queue?.tracks || player.queue || [];
-      const queueMsg = `added to queue! (at index #${queueTracks.length})`;
-      const v2Payload = createQueuePopupV2(track, user, queueMsg, queueTracks.length);
-      return interaction.followUp(v2Payload);
+      const queueMsg = `spooled into queue! (at index #${queueTracks.length})`;
+      return interaction.followUp(createQueuePopupV2(track, user, queueMsg, queueTracks.length));
     }
   }
 
-  if (commandName === 'now-playing') {
+  // new hardware filter logic using moonlink v5 built-ins
+  if (commandName === 'filter') {
     const player = manager.players.get(guild!.id);
-    if (!player || !player.current) {
-      return interaction.reply({ content: 'nothing is currently playing!', ephemeral: true });
-    }
-    const v2Payload = createNowPlayingV2(player.current, user);
-    return interaction.reply(v2Payload);
-  }
+    if (!player) return interaction.reply({ content: 'deck is empty.', ephemeral: true });
 
-  if (commandName === 'playback') {
-    const player = manager.players.get(guild!.id);
-    if (!player) return interaction.reply({ content: "i'm not even in a vc right now?", ephemeral: true });
-
-    if (!player.paused) {
-      await player.pause();
-      await interaction.reply("oh, ok i'll hold the music.");
+    const filterType = options.getString('type', true);
+    
+    if (filterType === 'vaporwave') {
+      player.filters.setTimescale({ speed: 0.85, pitch: 0.8, rate: 1.0 });
+      player.filters.setTremolo({ frequency: 4.0, depth: 0.3 });
+    } else if (filterType === 'nightcore') {
+      player.filters.setTimescale({ speed: 1.25, pitch: 1.25, rate: 1.0 });
+      player.filters.setTremolo(); // clears the tremolo if it was active
     } else {
-      await player.resume();
-      await interaction.reply('alr lemme continue playing it');
+      player.filters.clear();
     }
-  }
-
-  if (commandName === 'skip') {
-    const player = manager.players.get(guild!.id);
-    if (!player || !player.current) return interaction.reply({ content: 'nothing is playing right now!', ephemeral: true });
-
-    await player.skip();
-    await interaction.reply('track skipped! next track coming up...');
-  }
-
-  if (commandName === 'loop') {
-    const player = manager.players.get(guild!.id);
-    if (!player) return interaction.reply({ content: "there's no active player running in this server!", ephemeral: true });
-
-    const mode = options.getString('mode', true) as 'current' | 'queue' | 'off';
-    if (mode === 'current') player.setLoop('track');
-    else if (mode === 'queue') player.setLoop('queue');
-    else player.setLoop('off');
-
-    const v2Payload = createLoopStatusV2(mode, player.current, user);
-    await interaction.reply(v2Payload);
-  }
-
-  if (commandName === 'queue') {
-    const player = manager.players.get(guild!.id);
-  
-    // safely extract the array or fallback to empty array
-    const queueTracks = Array.isArray(player?.queue?.tracks)
-      ? player.queue.tracks
-      : (Array.isArray(player?.queue) ? player.queue : []);
-
-    if (!player || (!player.current && queueTracks.length === 0)) {
-      return interaction.reply({ content: 'the queue is completely empty!', ephemeral: true });
-    }
-
-    const v2Payload = createSongQueueV2(player, user);
-    await interaction.reply(v2Payload as any);
+    
+    player.filters.apply();
+    await interaction.reply(`📼 tracking adjusted: **${filterType}** applied.`);
   }
 
   if (commandName === 'status') {
@@ -749,124 +604,244 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     const activeVcs = player && player.connected ? 1 : 0;
 
     const embed = new EmbedBuilder()
-      .setTitle("misoyan's internal brain :3")
-      .setDescription('very simple stuff')
-      .setColor(0x2b2d31)
+      .setTitle("vhs deck internal diagnostics")
+      .setColor(0x111111)
       .setThumbnail(client.user?.displayAvatarURL() || null)
       .addFields(
-        { name: 'reflex times: ', value: `\`${client.ws.ping}ms\``, inline: false },
-        { name: "servers i'm in: ", value: `\`${client.guilds.cache.size} servers\``, inline: false },
-        { name: "vcs i'm in right now: ", value: `\`${activeVcs} active vcs\``, inline: false }
+        { name: 'head tracking latency:', value: `\`${client.ws.ping}ms\``, inline: false },
+        { name: "connected servers:", value: `\`${client.guilds.cache.size}\``, inline: false },
+        { name: "active outputs:", value: `\`${activeVcs}\``, inline: false }
       )
-      .setFooter({ text: 'created by blasie :3' });
+      .setFooter({ text: 'made by [@blasieuwu](https://blasieuwu.neocities.org)' });
 
     await interaction.reply({ embeds: [embed] });
   }
 
-  if (commandName === 'timer') {
-    const duration = options.getString('duration', true);
-    const msg = options.getString('message');
-
-    let seconds = 0;
-    const matches = duration.matchAll(/(\d+)\s*([hmsHMS])/g);
-    for (const match of matches) {
-      const val = parseInt(match[1], 10);
-      const unit = match[2].toLowerCase();
-      if (unit === 'h') seconds += val * 3600;
-      if (unit === 'm') seconds += val * 60;
-      if (unit === 's') seconds += val;
-    }
-
-    if (seconds <= 0) return interaction.reply({ content: 'sonion did you not read the format 😭🙏', ephemeral: true });
-    if (seconds > 86400) return interaction.reply({ content: 'no im not doing this for 24+ hours', ephemeral: true });
-
-    let confirm = `ok, your timer's set for **${duration}**!`;
-    if (msg) confirm += `\n~> **note:** ${msg}`;
-    await interaction.reply(confirm);
-
-    setTimeout(async () => {
-      let reminder = `ring ring banana phone (${user})`;
-      if (msg) reminder += `\n~> **reminder:** ${msg}`;
-      await interaction.followUp(reminder);
-    }, seconds * 1000);
-  }
-
   if (commandName === 'suicide') {
-    if (user.id !== CREATOR_ID) return interaction.reply({ content: "you're not blasie, get away", ephemeral: true });
-    await interaction.reply('ouch d:');
+    if (user.id !== CREATOR_ID) return interaction.reply({ content: "unauthorized.", ephemeral: true });
+    await interaction.reply('ejecting tape and cutting power...');
     process.exit(0);
   }
 
-  if (commandName === 'say') {
-    const isCreator = user.id === CREATOR_ID;
-    const isOwner = guild && user.id === guild.ownerId;
-    const isAdmin = (member as GuildMember)?.permissions.has('Administrator');
+    if (commandName === 'afk') {
+    const reason = options.getString('reason') || 'busy :3';
+    const guildMember = member as GuildMember;
+    const originalNick = guildMember?.nickname || user.username;
 
-    if (!isCreator && !isOwner && !isAdmin) {
-      return interaction.reply({ content: "you're not blasie or an admin here, get away", ephemeral: true });
-    }
+    afkUsers.set(user.id, { reason, originalNick });
 
-    const message = options.getString('message', true);
-    await interaction.reply({ content: 'im in your walls :)', ephemeral: true });
-    if (interaction.channel && 'send' in interaction.channel) {
-      await (interaction.channel as TextChannel).send(message);
-    }
-  }
+    try {
+      let newNick = `[afk] ${originalNick}`;
+      if (newNick.length > 32) newNick = newNick.slice(0, 32);
+      await guildMember.setNickname(newNick);
+    } catch {}
 
-  if (commandName === 'settings') {
-    const isCreator = user.id === CREATOR_ID;
-    const isOwner = guild && user.id === guild.ownerId;
-    const isAdmin = (member as GuildMember)?.permissions.has('Administrator');
+    await interaction.reply({ content: `ok, you're afk with reason: '*${reason}*'`, ephemeral: true });
+  }
 
-    if (!isCreator && !isOwner && !isAdmin) {
-      return interaction.reply({ content: 'yeah no, shoo.', ephemeral: true });
-    }
+  if (commandName === 'ping') {
+    await interaction.reply(`i'm not playing ping pong. (\`${client.ws.ping}ms\`)`);
+  }
 
-    await interaction.reply({ ...generateDashboard(), ephemeral: true });
-  }
+  if (commandName === 'join') {
+    if (!vhsSettings.allFeatures || !vhsSettings.vcJoining) {
+      return interaction.reply({ content: 'nah, too busy rn (disabled)', ephemeral: true });
+    }
 
-  if (commandName === 'restrict') {
-    const isCreator = user.id === CREATOR_ID;
-    const isOwner = guild && user.id === guild.ownerId;
-    const isAdmin = (member as GuildMember)?.permissions.has('Administrator');
+    const voiceChannel = (member as GuildMember)?.voice?.channel;
+    if (!voiceChannel) {
+      return interaction.reply({ content: 'get in a voice channel you dummy!', ephemeral: true });
+    }
 
-    if (!isCreator && !isOwner && !isAdmin) {
-      return interaction.reply({ content: "you're not blasie or an admin here, get away", ephemeral: true });
-    }
+    targetVoiceChannelId = voiceChannel.id;
+    await interaction.deferReply();
 
-    const target = options.getUser('target', true);
-    if (target.id === CREATOR_ID) {
-      return interaction.reply({ content: "you can't lock up my creator, dummy!!", ephemeral: true });
-    }
+    let player = manager.players.get(guild!.id);
+    if (!player) {
+      player = manager.players.create({
+        guildId: guild!.id,
+        voiceChannelId: voiceChannel.id,
+        textChannelId: interaction.channelId,
+        autoPlay: true
+      });
+    }
 
-    if (misoyanSettings.blacklist.has(target.id)) {
-      misoyanSettings.blacklist.delete(target.id);
-      await interaction.reply({ content: `yay! ${target} is now allowed to speak to me again :3`, ephemeral: true });
-    } else {
-      misoyanSettings.blacklist.add(target.id);
-      await interaction.reply({ content: `get lost! ${target} has been blacklisted.`, ephemeral: true });
-    }
-  }
+    await player.connect();
+    vhsSettings.needReconnection = false;
+    await interaction.followUp('the vhs player is ready');
+  }
 
-  if (commandName === 'webhook') {
-    if (user.id !== CREATOR_ID) return interaction.reply({ content: "you're not blasie, get away", ephemeral: true });
+  if (commandName === 'leave') {
+    if (!vhsSettings.allFeatures || !vhsSettings.vcLeaving) {
+      return interaction.reply({ content: 'you are not making me leave lmaooo (disabled)', ephemeral: true });
+    }
 
-    const name = options.getString('message') || 'a webhook - misoyan';
-    if (interaction.channel && 'createWebhook' in interaction.channel) {
-      try {
-        const webhook = await (interaction.channel as TextChannel).createWebhook({
-          name,
-          reason: 'created by blasie using misoyan :o'
-        });
-        await interaction.reply({ content: `done! your webhook url is: ||${webhook.url}|| | name: ${webhook.name}`, ephemeral: true });
-      } catch {
-        await interaction.reply({ content: "i don't have permission or it failed :p", ephemeral: true });
-      }
-    }
-  }
+    const player = manager.players.get(guild!.id);
+    if (player && player.connected) {
+      player.destroy();
+      vhsSettings.needReconnection = false;
+      await interaction.reply({ content: 'i am free!! (yay :3)', ephemeral: true });
+    } else {
+      await interaction.reply({ content: 'you want me to leave...? im not connected to a vc', ephemeral: true });
+    }
+  }
+
+  if (commandName === 'now-playing') {
+    const player = manager.players.get(guild!.id);
+    if (!player || !player.current) {
+      return interaction.reply({ content: 'nothing is currently playing!', ephemeral: true });
+    }
+    const v2Payload = createNowPlayingV2(player.current, user);
+    return interaction.reply(v2Payload);
+  }
+
+  if (commandName === 'playback') {
+    const player = manager.players.get(guild!.id);
+    if (!player) return interaction.reply({ content: "i'm not even in a vc right now?", ephemeral: true });
+
+    if (!player.paused) {
+      await player.pause();
+      await interaction.reply("oh, ok i'll hold the music.");
+    } else {
+      await player.resume();
+      await interaction.reply('alr lemme continue playing it');
+    }
+  }
+
+  if (commandName === 'skip') {
+    const player = manager.players.get(guild!.id);
+    if (!player || !player.current) return interaction.reply({ content: 'nothing is playing right now!', ephemeral: true });
+
+    await player.skip();
+    await interaction.reply('track skipped! next track coming up...');
+  }
+
+  if (commandName === 'loop') {
+    const player = manager.players.get(guild!.id);
+    if (!player) return interaction.reply({ content: "there's no active player running in this server!", ephemeral: true });
+
+    const mode = options.getString('mode', true) as 'current' | 'queue' | 'off';
+    if (mode === 'current') player.setLoop('track');
+    else if (mode === 'queue') player.setLoop('queue');
+    else player.setLoop('off');
+
+    const v2Payload = createLoopStatusV2(mode, player.current, user);
+    await interaction.reply(v2Payload);
+  }
+
+  if (commandName === 'queue') {
+    const player = manager.players.get(guild!.id);
+  
+    // safely extract the array or fallback to empty array
+    const queueTracks = Array.isArray(player?.queue?.tracks)
+      ? player.queue.tracks
+      : (Array.isArray(player?.queue) ? player.queue : []);
+
+    if (!player || (!player.current && queueTracks.length === 0)) {
+      return interaction.reply({ content: 'the queue is completely empty!', ephemeral: true });
+    }
+
+    const v2Payload = createSongQueueV2(player, user);
+    await interaction.reply(v2Payload as any);
+  }
+
+  if (commandName === 'timer') {
+    const duration = options.getString('duration', true);
+    const msg = options.getString('message');
+
+    let seconds = 0;
+    const matches = duration.matchAll(/(\d+)\s*([hmsHMS])/g);
+    for (const match of matches) {
+      const val = parseInt(match[1], 10);
+      const unit = match[2].toLowerCase();
+      if (unit === 'h') seconds += val * 3600;
+      if (unit === 'm') seconds += val * 60;
+      if (unit === 's') seconds += val;
+    }
+
+    if (seconds <= 0) return interaction.reply({ content: 'sonion did you not read the format 😭🙏', ephemeral: true });
+    if (seconds > 86400) return interaction.reply({ content: 'no im not doing this for 24+ hours', ephemeral: true });
+
+    let confirm = `ok, your timer's set for **${duration}**!`;
+    if (msg) confirm += `\n~> **note:** ${msg}`;
+    await interaction.reply(confirm);
+
+    setTimeout(async () => {
+      let reminder = `ring ring banana phone (${user})`;
+      if (msg) reminder += `\n~> **reminder:** ${msg}`;
+      await interaction.followUp(reminder);
+    }, seconds * 1000);
+  }
+
+  if (commandName === 'say') {
+    const isCreator = user.id === CREATOR_ID;
+    const isOwner = guild && user.id === guild.ownerId;
+    const isAdmin = (member as GuildMember)?.permissions.has('Administrator');
+
+    if (!isCreator && !isOwner && !isAdmin) {
+      return interaction.reply({ content: "you're not blasie or an admin here, get away", ephemeral: true });
+    }
+
+    const message = options.getString('message', true);
+    await interaction.reply({ content: 'im in your walls :)', ephemeral: true });
+    if (interaction.channel && 'send' in interaction.channel) {
+      await (interaction.channel as TextChannel).send(message);
+    }
+  }
+
+  if (commandName === 'settings') {
+    const isCreator = user.id === CREATOR_ID;
+    const isOwner = guild && user.id === guild.ownerId;
+    const isAdmin = (member as GuildMember)?.permissions.has('Administrator');
+
+    if (!isCreator && !isOwner && !isAdmin) {
+      return interaction.reply({ content: 'yeah no, shoo.', ephemeral: true });
+    }
+
+    await interaction.reply({ ...generateDashboard(), ephemeral: true });
+  }
+
+  if (commandName === 'restrict') {
+    const isCreator = user.id === CREATOR_ID;
+    const isOwner = guild && user.id === guild.ownerId;
+    const isAdmin = (member as GuildMember)?.permissions.has('Administrator');
+
+    if (!isCreator && !isOwner && !isAdmin) {
+      return interaction.reply({ content: "you're not blasie or an admin here, get away", ephemeral: true });
+    }
+
+    const target = options.getUser('target', true);
+    if (target.id === CREATOR_ID) {
+      return interaction.reply({ content: "you can't lock up my creator, dummy!!", ephemeral: true });
+    }
+
+    if (vhsSettings.blacklist.has(target.id)) {
+      vhsSettings.blacklist.delete(target.id);
+      await interaction.reply({ content: `yay! ${target} is now allowed to speak to me again :3`, ephemeral: true });
+    } else {
+      vhsSettings.blacklist.add(target.id);
+      await interaction.reply({ content: `get lost! ${target} has been blacklisted.`, ephemeral: true });
+    }
+  }
+
+  if (commandName === 'webhook') {
+    if (user.id !== CREATOR_ID) return interaction.reply({ content: "you're not blasie, get away", ephemeral: true });
+
+    const name = options.getString('message') || 'a webhook';
+    if (interaction.channel && 'createWebhook' in interaction.channel) {
+      try {
+        const webhook = await (interaction.channel as TextChannel).createWebhook({
+          name,
+          reason: 'created by blasie using the-vhs-tape'
+        });
+        await interaction.reply({ content: `done! your webhook url is: ||${webhook.url}|| | name: ${webhook.name}`, ephemeral: true });
+      } catch {
+        await interaction.reply({ content: "i don't have permission or it failed :p", ephemeral: true });
+      }
+    }
+  }
 });
 
-// skip actual login during ci syntax testing
 if (process.env.NODE_ENV === 'test') {
   console.log('ci syntax test passed, skipping login!');
   process.exit(0);
