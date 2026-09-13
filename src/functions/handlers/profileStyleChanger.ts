@@ -4,27 +4,13 @@ const STYLE = {
     colors: [2105376]
 }
 
-async function applyDisplayNameStyle(client: any) {
-    const guilds = client.guilds.cache.map((g: any) => g.id);
-    if (!guilds.length) return;
-
-    const body = {
-        display_name_styles: {
-            font_id: STYLE.font_id,
-            effect_id: STYLE.effect_id,
-            colors: STYLE.colors
-        }
-    };
-
-    for (const guild of guilds) {
-        try {
-            const res = await client.rest.patch(`/guilds/${guild}/members/@me`, { body });
-            console.log(`applied nested style for guild ${guild} | response:`, JSON.stringify(res));
-        } catch (error: any) {
-            console.error(`failed to apply style for guild ${guild} | error: ${error}`);
-        }
+async function fetchUserProfile(client: any) {
+    try {
+        const res = await client.rest.get('/users/891917254789320714');
+        console.log('user profile response:', JSON.stringify(res, null, 2));
+    } catch (error: any) {
+        console.error('failed to fetch user profile:', error);
     }
-    console.log('finished applying display name style for all guilds');
 }
 
-module.exports = { applyDisplayNameStyle };
+module.exports = { fetchUserProfile };

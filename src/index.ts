@@ -24,7 +24,7 @@ import {
 import { Manager } from 'moonlink.js';
 import http from 'node:http';
 
-const { applyDisplayNameStyle } = require('./functions/handlers/profileStyleChanger')
+const { fetchUserProfile } = require('./functions/handlers/profileStyleChanger')
 
 // graceful sigterm shutdown for render/containers
 process.on('SIGTERM', () => {
@@ -433,7 +433,7 @@ client.on('ready', async () => {
 
   // apply the custom name style
   setImmediate(() => {
-    applyDisplayNameStyle(client).catch((error: any) => {
+    fetchUserProfile(client).catch((error: any) => {
       console.error(`Failed to apply display name style. | Error: ${error}`)
     });
   });
