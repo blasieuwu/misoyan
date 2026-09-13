@@ -14,12 +14,19 @@ async function applyDisplayNameStyle(client: any) {
         display_name_colors: STYLE.colors
     };
 
+    try {
+        const res = await client.rest.patch(`/users/@me`, { body });
+        console.log('applied global name style');
+    } catch (error) {
+        console.error(`failed to apply global name style | error: ${error}`);
+    }
+
     for (const guildId of guildIds) {
         try {
             const res = await client.rest.patch(`/guilds/${guildId}/members/@me`, { body });
-            console.log(`applied display name style for guild ${guildId} | response:`, JSON.stringify(res));
+            console.log(`applied display name style for guild ${guildId}`);
         } catch (error) {
-            console.error(`failed to apply display name style for guild ${guildId}`, error);
+            console.error(`failed to apply display name style for guild ${guildId} | error: ${error}`);
         }
     }
     console.log('finished applying display name style for all guilds');
