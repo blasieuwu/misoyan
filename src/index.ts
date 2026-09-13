@@ -9,17 +9,16 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ActivityType,
-  PresenceUpdateStatus,
+  PresenceStatusData,
   TextChannel,
   VoiceChannel,
-  User,
   GuildMember,
   Interaction,
   Message,
   VoiceState
 } from 'discord.js';
-import { Manager, Connectors } from 'moonlink.js';
-import http from 'node.http';
+import { Manager } from 'moonlink.js';
+import http from 'node:http';
 
 // graceful sigterm shutdown for render/containers
 process.on('SIGTERM', () => {
@@ -68,7 +67,7 @@ const client = new Client({
   ]
 });
 
-// moonlink.js manager
+// moonlink.js v5 manager
 const manager = new Manager({
   nodes: [
     {
@@ -79,12 +78,11 @@ const manager = new Manager({
       identifier: 'misoyan'
     }
   ],
-  options: {
-    sortNode: 'cpu-usage'
+  send: (guildId: string, sPayload: any) => {
+    const guild = client.guilds.cache.get(guildId);
+    if (guild) guild.shard.send(sPayload);
   }
 });
-
-manager.use(new Connectors.DiscordJs(), client);
 
 // reply list
 const replyList = [
@@ -114,24 +112,24 @@ const replyList = [
 ];
 
 // status pool
-const statusPool = [
-  { status: PresenceUpdateStatus.Online, name: 'hanging out in the vc :3' },
-  { status: PresenceUpdateStatus.Idle, name: 'waiting for someone to join :c' },
-  { status: PresenceUpdateStatus.DoNotDisturb, name: 'learning new stuff...' },
-  { status: PresenceUpdateStatus.Invisible, name: 'lurking...' },
-  { status: PresenceUpdateStatus.Online, name: 'yapping in yappanese bleh' },
-  { status: PresenceUpdateStatus.Idle, name: 'waiting for someone to call my name :c' },
-  { status: PresenceUpdateStatus.DoNotDisturb, name: 'please do the fih' },
-  { status: PresenceUpdateStatus.Invisible, name: 'sleeping... zzz' },
-  { status: PresenceUpdateStatus.DoNotDisturb, name: 'planning next stream' },
-  { status: PresenceUpdateStatus.Idle, name: 'bored as hell' },
-  { status: PresenceUpdateStatus.Online, name: 'hanging out on stream' },
-  { status: PresenceUpdateStatus.DoNotDisturb, name: "i'm lurking in your walls :3" }
+const statusPool: { status: PresenceStatusData; name: string }[] = [
+  { status: 'online', name: 'hanging out in the vc :3' },
+  { status: 'idle', name: 'waiting for someone to join :c' },
+  { status: 'dnd', name: 'learning new stuff...' },
+  { status: 'invisible', name: 'lurking...' },
+  { status: 'online', name: 'yapping in yappanese bleh' },
+  { status: 'idle', name: 'waiting for someone to call my name :c' },
+  { status: 'dnd', name: 'please do the fih' },
+  { status: 'invisible', name: 'sleeping... zzz' },
+  { status: 'dnd', name: 'planning next stream' },
+  { status: 'idle', name: 'bored as hell' },
+  { status: 'online', name: 'hanging out on stream' },
+  { status: 'dnd', name: "i'm lurking in your walls :3" }
 ];
 
 // keepalive server
 function startWebServer() {
-  const server = http.createServer((req, res) => {
+  const server = http.createServer((req: http.IncomingMessage, res: http.ServerResponse) => {
     if (!client.isReady()) {
       res.writeHead(503, { 'Content-Type': 'text/plain' });
       res.end('bot is offline or unready :c');
@@ -204,7 +202,6 @@ function generateDashboard() {
 }
 
 // status rotation loop
-let statusTimer: NodeJS.Timeout | null = null;
 function startStatusLoop() {
   const run = () => {
     if (misoyanSettings.allFeatures && misoyanSettings.statusChanges && client.user) {
@@ -215,7 +212,7 @@ function startStatusLoop() {
       });
     }
     const interval = misoyanSettings.statusChangeDelay ? 60000 : 150000;
-    statusTimer = setTimeout(run, interval);
+    setTimeout(run, interval);
   };
   run();
 }
@@ -240,11 +237,11 @@ setInterval(async () => {
       if (player) player.destroy();
       const newPlayer = manager.players.create({
         guildId: channel.guild.id,
-        voiceChannel: channel.id,
-        textChannel: channel.id,
+        voiceChannelId: channel.id,
+        textChannelId: channel.id,
         autoPlay: true
       });
-      newPlayer.connect();
+      await newPlayer.connect();
       console.log('\x1b[1;38;2;88;101;242m[discord - vc]\x1b[0m connection reestablished');
     } catch (e) {
       console.log(`\x1b[1;38;2;88;101;242m[discord - vc]\x1b[0m \x1b[31man error occured while reconnecting: \x1b[1;4;31m${e}\x1b[0m`);
@@ -258,7 +255,7 @@ setInterval(async () => {
 client.on('ready', async () => {
   console.log(`\x1b[1;38;2;88;101;242m[discord - sign-in]\x1b[0m signing in as \x1b[1m${client.user?.tag}\x1b[0m`);
   startWebServer();
-  manager.init(client.user?.id);
+  manager.init(client.user!.id);
   startStatusLoop();
 
   // register slash commands
@@ -267,8 +264,7 @@ client.on('ready', async () => {
     new SlashCommandBuilder().setName('ping').setDescription("check misoyan's reflexes"),
     new SlashCommandBuilder().setName('join').setDescription('i wanna join the vc :3'),
     new SlashCommandBuilder().setName('leave').setDescription('pls let me go :c'),
-    new SlashCommandBuilder(
-    ).setName('play').setDescription('use my speakers :3').addStringOption((o) => o.setName('search').setDescription('the title or link').setRequired(true)).addStringOption((o) => o.setName('timing').setDescription('queue priority').addChoices({ name: 'add to queue (default)', value: 'queue' }, { name: 'play next', value: 'next' }, { name: 'replace current track', value: 'replace' })),
+    new SlashCommandBuilder().setName('play').setDescription('use my speakers :3').addStringOption((o) => o.setName('search').setDescription('the title or link').setRequired(true)).addStringOption((o) => o.setName('timing').setDescription('queue priority').addChoices({ name: 'add to queue (default)', value: 'queue' }, { name: 'play next', value: 'next' }, { name: 'replace current track', value: 'replace' })),
     new SlashCommandBuilder().setName('now-playing').setDescription('see what track is currently playing'),
     new SlashCommandBuilder().setName('playback').setDescription('pause or unpause the current music playback'),
     new SlashCommandBuilder().setName('skip').setDescription("skip this track if it's bad bleh"),
@@ -294,7 +290,11 @@ client.on('ready', async () => {
   }
 });
 
-manager.on('nodeConnect', (node) => {
+client.on('raw', (data: any) => {
+  manager.packetUpdate(data);
+});
+
+manager.on('nodeCreate', (node: any) => {
   console.log(`\x1b[1;32m[lavalink] node '${node.identifier}' is ready!\x1b[0m`);
 });
 
@@ -319,13 +319,17 @@ client.on('messageCreate', async (message: Message) => {
     try {
       await message.member?.setNickname(data.originalNick);
     } catch {}
-    await message.channel.send(`welcome back, ${message.author}. you're no longer afk.`);
+    if (message.channel && 'send' in message.channel) {
+      await (message.channel as TextChannel).send(`welcome back, ${message.author}. you're no longer afk.`);
+    }
   }
 
   for (const [, user] of message.mentions.users) {
     if (afkUsers.has(user.id)) {
       const data = afkUsers.get(user.id)!;
-      await message.channel.send(`hey, ${user.username}'s afk.\n~> reason: '*${data.reason}*'`);
+      if (message.channel && 'send' in message.channel) {
+        await (message.channel as TextChannel).send(`hey, ${user.username}'s afk.\n~> reason: '*${data.reason}*'`);
+      }
     }
   }
 
@@ -395,15 +399,15 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     if (!player) {
       player = manager.players.create({
         guildId: guild!.id,
-        voiceChannel: voiceChannel.id,
-        textChannel: interaction.channelId,
+        voiceChannelId: voiceChannel.id,
+        textChannelId: interaction.channelId,
         autoPlay: true
       });
     }
 
-    player.connect();
+    await player.connect();
     misoyanSettings.needReconnection = false;
-    await interaction.followup('im in your vc now :d');
+    await interaction.followUp('im in your vc now :d');
   }
 
   if (commandName === 'leave') {
@@ -437,17 +441,17 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     if (!player || !player.connected) {
       player = manager.players.create({
         guildId: guild!.id,
-        voiceChannel: voiceChannel.id,
-        textChannel: interaction.channelId,
+        voiceChannelId: voiceChannel.id,
+        textChannelId: interaction.channelId,
         autoPlay: true
       });
-      player.connect();
+      await player.connect();
       targetVoiceChannelId = voiceChannel.id;
     }
 
     const res = await manager.search({ query, source: 'youtube' });
     if (!res || !res.tracks.length) {
-      return interaction.followup({ content: "i couldn't find anything with that search query :c", ephemeral: true });
+      return interaction.followUp({ content: "i couldn't find anything with that search query :c", ephemeral: true });
     }
 
     const track = res.tracks[0];
@@ -459,16 +463,16 @@ client.on('interactionCreate', async (interaction: Interaction) => {
         .setTitle(track.title)
         .setDescription(`artist: **${track.author}**`)
         .setColor(0xe6ba81);
-      return interaction.followup({ content: `-# now playing! - requested by @${user.username} :3`, embeds: [embed] });
+      return interaction.followUp({ content: `-# now playing! - requested by @${user.username} :3`, embeds: [embed] });
     }
 
     if (timing === 'replace') {
       player.queue.add(track);
       player.skip();
-      return interaction.followup(`now playing **${track.title}** (replaced)`);
+      return interaction.followUp(`now playing **${track.title}** (replaced)`);
     } else {
       player.queue.add(track);
-      return interaction.followup(`added **${track.title}** to queue!`);
+      return interaction.followUp(`added **${track.title}** to queue!`);
     }
   }
 
@@ -477,10 +481,10 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     if (!player) return interaction.reply({ content: "i'm not even in a vc right now?", ephemeral: true });
 
     if (!player.paused) {
-      player.pause(true);
+      await player.pause();
       await interaction.reply("oh, ok i'll hold the music.");
     } else {
-      player.pause(false);
+      await player.resume();
       await interaction.reply('alr lemme continue playing it');
     }
   }
@@ -489,7 +493,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     const player = manager.players.get(guild!.id);
     if (!player || !player.current) return interaction.reply({ content: 'nothing is playing right now!', ephemeral: true });
 
-    player.skip();
+    await player.skip();
     await interaction.reply('track skipped! next track coming up...');
   }
 
@@ -498,21 +502,21 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     if (!player) return interaction.reply({ content: "there's no active player running in this server!", ephemeral: true });
 
     const mode = options.getString('mode', true);
-    if (mode === 'current') player.setRepeatMode('repeat-track');
-    else if (mode === 'queue') player.setRepeatMode('repeat-queue');
-    else player.setRepeatMode('off');
+    if (mode === 'current') player.setLoop('track');
+    else if (mode === 'queue') player.setLoop('queue');
+    else player.setLoop('off');
 
     await interaction.reply(`loop mode updated to: **${mode}**`);
   }
 
   if (commandName === 'queue') {
     const player = manager.players.get(guild!.id);
-    if (!player || (!player.current && player.queue.size === 0)) {
+    if (!player || (!player.current && player.queue.tracks.length === 0)) {
       return interaction.reply({ content: 'the queue is completely empty!', ephemeral: true });
     }
 
     const currentText = player.current ? `playing: **${player.current.title}**\n` : '';
-    const queueList = player.queue.slice(0, 5).map((t, i) => `#${i + 1} - ${t.title}`).join('\n');
+    const queueList = player.queue.tracks.slice(0, 5).map((t: any, i: number) => `#${i + 1} - ${t.title}`).join('\n');
 
     const embed = new EmbedBuilder()
       .setTitle('song queue')
@@ -566,7 +570,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     setTimeout(async () => {
       let reminder = `ring ring banana phone (${user})`;
       if (msg) reminder += `\n~> **reminder:** ${msg}`;
-      await interaction.followup(reminder);
+      await interaction.followUp(reminder);
     }, seconds * 1000);
   }
 
