@@ -6,16 +6,18 @@ const STYLE = {
 
 async function applyDisplayNameStyle(client: any) {
     const body = {
-        font_id: STYLE.font_id,
-        effect_id: STYLE.effect_id,
-        colors: STYLE.colors
+        display_name_style: {
+            font_id: STYLE.font_id,
+            effect_id: STYLE.effect_id,
+            colors: STYLE.colors
+        }
     };
 
     try {
         const res = await client.rest.patch('/users/@me', { body });
-        console.log(`applied global display name style | response:`, JSON.stringify(res));
+        console.log(`applied nested style | response:`, JSON.stringify(res));
     } catch (error: any) {
-        console.error(`failed to apply global display name style | error: ${error}`);
+        console.error(`failed to apply nested style | error: ${error}`);
     }
 }
 
