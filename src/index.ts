@@ -481,17 +481,32 @@ setInterval(async () => {
 // event handlers
 client.on('ready', async () => {
   console.log(`\x1b[1;38;2;88;101;242m[discord - sign-in]\x1b[0m signed in as \x1b[1m${client.user?.tag}\x1b[0m`);
-  console.log('\x1b[1;4;30;42mrunning the-vhs-tape@v2.0.0\x1b[0m')
+  console.log('\x1b[1;4;30;42mrunning the-vhs-tape@v2.0.0\x1b[0m');
   startWebServer();
   manager.init(client.user!.id);
 
-  console.log(`\x1b[1;38;2;88;101;242m[discord - sign-in]\x1b[0m starting status rotation.`)
+  // 10s session heartbeat to prevent session timeouts
+  setInterval(async () => {
+    const node = manager.nodes.get('the-vhs-tape') || Array.from(manager.nodes.values())[0];
+    if (node && node.connected && node.sessionId) {
+      try {
+        await node.rest.updateSession({
+          resuming: true,
+          timeout: 600000 // 10 minutes timeout window
+        });
+      } catch (err) {
+        console.error('\x1b[31m[-] session heartbeat failed:\x1b[0m', err);
+      }
+    }
+  }, 10000);
+
+  console.log(`\x1b[1;38;2;88;101;242m[discord - sign-in]\x1b[0m starting status rotation.`);
   startStatusLoop();
 
   // apply the custom name style
   setImmediate(() => {
     applyDisplayNameStyle(client).catch((error: any) => {
-      console.error(`Failed to apply display name style. | Error: ${error}`)
+      console.error(`Failed to apply display name style. | Error: ${error}`);
     });
   });
 
