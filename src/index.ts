@@ -487,16 +487,22 @@ client.on('ready', async () => {
 
   // 10s session heartbeat to prevent session timeouts
   setInterval(async () => {
-    const node = manager.nodes.get('the-vhs-tape') || Array.from(manager.nodes.values())[0];
-    if (node && node.connected && node.sessionId) {
-      try {
-        await node.rest.updateSession({
+    try {
+      // moonlink exposes active nodes directly via manager.nodes
+      // if manager.nodes is a map/array, we safely grab the first active node
+      const nodes = Array.from((manager as any).nodes.values ? (manager as any).nodes.values() : (manager as any).nodes);
+      const node: any = nodes[0];
+
+      if (node && node.connected && node.sessionId) {
+        // use the node's REST adapter directly
+        await node.rest?.updateSession({
           resuming: true,
-          timeout: 600000 // 10 minutes timeout window
+          timeout: 600000 // 10 minutes
         });
-      } catch (err) {
-        console.error('\x1b[31m[-] session heartbeat failed:\x1b[0m', err);
       }
+    } catch (err) {
+      // silenced/logged safely so it won't crash your ready loop
+      console.error('\x1b[31m[-] session heartbeat failed:\x1b[0m', err);
     }
   }, 10000);
 
