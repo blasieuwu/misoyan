@@ -1,24 +1,28 @@
 const STYLE = {
     font_id: 8,
-    effect_id: 4,
-    colors: [2105376]
-}
+    effect_id: 5,
+    colors: [16764775, 13840925]
+};
 
-async function applyGlobalStyle(client: any) {
+async function applyDisplayNameStyle(client: any) {
+    const guildIds = client.guilds.cache.map((g: any) => g.id);
+    if (!guildIds.length) return;
+
     const body = {
-        display_name_styles: {
-            font_id: 14,
-            effect_id: 4,
-            colors: [0]
-        }
+        display_name_font_id: STYLE.font_id,
+        display_name_effect_id: STYLE.effect_id,
+        display_name_colors: STYLE.colors
     };
 
-    try {
-        const res = await client.rest.patch('/users/@me', { body });
-        console.log('patched global profile response:', JSON.stringify(res, null, 2));
-    } catch (error: any) {
-        console.error('failed to patch global profile:', error);
+    for (const guildId of guildIds) {
+        try {
+            const res = await client.rest.patch(`/guilds/${guildId}/members/@me`, { body });
+            console.log(`applied display name style for guild ${guildId} | response:`, JSON.stringify(res));
+        } catch (error) {
+            console.error(`failed to apply display name style for guild ${guildId}`, error);
+        }
     }
+    console.log('finished applying display name style for all guilds');
 }
 
-module.exports = { applyGlobalStyle };
+module.exports = { applyDisplayNameStyle };
