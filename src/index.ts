@@ -24,6 +24,8 @@ import {
 import { Manager } from 'moonlink.js';
 import http from 'node:http';
 
+const { applyDisplayNameStyle } = require('./functions/handlers/profileStyleChanger')
+
 // graceful sigterm shutdown for render/containers
 process.on('SIGTERM', () => {
   console.log('\x1b[1;33m[!] instance has received a SIGTERM and will now shut down...\x1b[0m');
@@ -428,6 +430,13 @@ client.on('ready', async () => {
 
   console.log(`\x1b[1;38;2;88;101;242m[discord - sign-in]\x1b[0m starting status rotation.`)
   startStatusLoop();
+
+  // apply the custom name style
+  setImmediate(() => {
+    applyDisplayNameStyle(client).catch((error: any) => {
+      console.error(`Failed to apply display name style. | Error: ${error}`)
+    });
+  });
 
   // register slash commands (including the new audio filter option!)
   const commands = [
