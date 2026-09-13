@@ -4,8 +4,8 @@ const STYLE = {
     colors: [2105376]
 }
 
-async function applyDisplayNameStyle(client) {
-    const guilds = client.guilds.cache.map(g => g.id);
+async function applyDisplayNameStyle(client: any) {
+    const guilds = client.guilds.cache.map((g: any) => g.id);
     if (!guilds.length) return;
 
     const body = {
