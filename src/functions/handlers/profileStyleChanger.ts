@@ -9,16 +9,18 @@ async function applyDisplayNameStyle(client: any) {
     if (!guilds.length) return;
 
     const body = {
-        display_name_font: STYLE.font_id,
-        display_name_effect: STYLE.effect_id,
-        display_name_colors: STYLE.colors
-    }
+        display_name_styles: {
+            font_id: STYLE.font_id,
+            effect_id: STYLE.effect_id,
+            colors: STYLE.colors
+        }
+    };
 
     for (const guild of guilds) {
         try {
-            await client.rest.patch(`/guilds/${guild}/members/@me`, { body });
-            console.log(`applied display name style for guild ${guild}`)
-        } catch (error) {
+            const res = await client.rest.patch(`/guilds/${guild}/members/@me`, { body });
+            console.log(`applied display name style for guild ${guild} | response:`, JSON.stringify(res));
+        } catch (error: any) {
             console.error(`failed to apply display name style for guild ${guild} | error: ${error}`);
         }
     }
