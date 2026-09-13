@@ -18,7 +18,8 @@ import {
   VoiceState,
   User,
   Guild,
-  MessageFlags
+  MessageFlags,
+  InteractionReplyOptions
 } from 'discord.js';
 import { Manager } from 'moonlink.js';
 import http from 'node:http';
@@ -101,7 +102,7 @@ function formatDuration(ms?: number | null): string {
 // ==========================================
 
 // 1. NowPlayingView (Components V2)
-function createNowPlayingV2(track: any, user: User, extra: string = '', overrideCover?: string | null) {
+function createNowPlayingV2(track: any, user: User, extra: string = '', overrideCover?: string | null): InteractionReplyOptions {
   const userHandle = `@${user.username}`;
   let trackCoverUrl = 'https://placehold.co/240x240/eaeaea/969696.png?text=no+cover';
 
@@ -125,7 +126,7 @@ function createNowPlayingV2(track: any, user: User, extra: string = '', override
   const contentText = `- # now playing!${displayPrefix} - requested by ${userHandle} :3\n## ${trackTitle}\nartist: **${artistName}**\nduration: ${duration}`;
 
   return {
-    flags: MessageFlags.IsComponentsV2,
+    flags: MessageFlags.IsComponentsV2 as any,
     components: [
       {
         type: 1, // Container Component
@@ -146,7 +147,7 @@ function createNowPlayingV2(track: any, user: User, extra: string = '', override
 }
 
 // 2. QueuePopup (Components V2)
-function createQueuePopupV2(track: any, user: User, queueMessage: string, position?: number) {
+function createQueuePopupV2(track: any, user: User, queueMessage: string, position?: number): InteractionReplyOptions {
   const userHandle = `@${user.username}`;
   const trackCoverUrl = track.info?.artworkUrl || track.artworkUrl || 'https://placehold.co/240x240/eaeaea/969696.png?text=no+cover';
   const duration = formatDuration(track.info?.length || track.duration);
@@ -157,7 +158,7 @@ function createQueuePopupV2(track: any, user: User, queueMessage: string, positi
   const textMetadata = `- # requested by ${userHandle} :3\n${queueMessage}\n# ${trackTitle}\nartist: **${artistName}**\nduration: ${duration}${indexStr}`;
 
   return {
-    flags: MessageFlags.IsComponentsV2,
+    flags: MessageFlags.IsComponentsV2 as any,
     components: [
       {
         type: 1, // Container Component
@@ -183,7 +184,7 @@ function createQueuePopupV2(track: any, user: User, queueMessage: string, positi
 }
 
 // 3. SongQueue (Components V2)
-function createSongQueueV2(player: any, user: User) {
+function createSongQueueV2(player: any, user: User): InteractionReplyOptions {
   const containerComponents: any[] = [];
   let currentCover = 'https://placehold.co/240x240/eaeaea/969696.png?text=no+cover';
 
@@ -214,7 +215,12 @@ function createSongQueueV2(player: any, user: User) {
     });
   }
 
-  const queueTracks = player.queue?.tracks || player.queue || [];
+  const queueTracks = Array.isArray(player.queue?.tracks)
+    ? player.queue.tracks
+    : Array.isArray(player.queue)
+    ? player.queue
+    : [];
+
   const limit = Math.min(queueTracks.length, 4);
 
   for (let i = 0; i < limit; i++) {
@@ -231,7 +237,7 @@ function createSongQueueV2(player: any, user: User) {
   }
 
   return {
-    flags: MessageFlags.IsComponentsV2,
+    flags: MessageFlags.IsComponentsV2 as any,
     components: [
       {
         type: 1, // Container Component
@@ -243,7 +249,7 @@ function createSongQueueV2(player: any, user: User) {
 }
 
 // 4. LoopStatusView (Components V2)
-function createLoopStatusV2(mode: 'current' | 'queue' | 'off', track: any, user: User) {
+function createLoopStatusV2(mode: 'current' | 'queue' | 'off', track: any, user: User): InteractionReplyOptions {
   const userHandle = `@${user.username}`;
   let thumbnailUrl = user.displayAvatarURL();
   let cardText = '';
@@ -262,7 +268,7 @@ function createLoopStatusV2(mode: 'current' | 'queue' | 'off', track: any, user:
   }
 
   return {
-    flags: MessageFlags.IsComponentsV2,
+    flags: MessageFlags.IsComponentsV2 as any,
     components: [
       {
         type: 1, // Container Component
@@ -724,13 +730,18 @@ client.on('interactionCreate', async (interaction: Interaction) => {
 
   if (commandName === 'queue') {
     const player = manager.players.get(guild!.id);
-    const queueTracks = player?.queue?.tracks || player?.queue || [];
+  
+    // safely extract the array or fallback to empty array
+    const queueTracks = Array.isArray(player?.queue?.tracks)
+      ? player.queue.tracks
+      : (Array.isArray(player?.queue) ? player.queue : []);
+
     if (!player || (!player.current && queueTracks.length === 0)) {
       return interaction.reply({ content: 'the queue is completely empty!', ephemeral: true });
     }
 
     const v2Payload = createSongQueueV2(player, user);
-    await interaction.reply(v2Payload);
+    await interaction.reply(v2Payload as any);
   }
 
   if (commandName === 'status') {
