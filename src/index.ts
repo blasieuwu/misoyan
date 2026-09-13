@@ -649,4 +649,10 @@ client.on('interactionCreate', async (interaction: Interaction) => {
   }
 });
 
+// skip actual login during ci syntax testing
+if (process.env.NODE_ENV === 'test') {
+  console.log('ci syntax test passed, skipping login!');
+  process.exit(0);
+}
+
 client.login(BOT_TOKEN);

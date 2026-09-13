@@ -8,6 +8,7 @@ on:
 jobs:
   notify:
     runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '--workflow-off')"
     steps:
       - name: send discord message
         env:
@@ -16,6 +17,7 @@ jobs:
           BRANCH: ${{ github.ref_name }}
           COMMIT_MSG: ${{ github.event.head_commit.message }}
           SHORT_SHA: ${{ github.event.head_commit.id }}
+          COMMITS_JSON: ${{ toJson(github.event.commits) }}
           WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
           # extract repo owner from "owner/repo"
@@ -24,8 +26,8 @@ jobs:
           SHORT_SHA_TRIMMED="${SHORT_SHA:0:7}"
           CLEAN_MSG=$(echo "$COMMIT_MSG" | head -n 1)
 
-          # count total commits in this push event
-          COMMIT_COUNT=$(echo '${{ toJson(github.event.commits) }}' | jq 'length')
+          # count total commits safely using env var
+          COMMIT_COUNT=$(echo "$COMMITS_JSON" | jq 'length')
           
           # fallback to 1 if commits array is empty (e.g. forced pushes or edge cases)
           if [ -z "$COMMIT_COUNT" ] || [ "$COMMIT_COUNT" -eq 0 ]; then
