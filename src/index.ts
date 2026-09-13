@@ -98,85 +98,135 @@ function formatDuration(ms?: number | null): string {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-// ==========================================
-// COMPONENTS V2 LAYOUT VIEWS (vhs theme)
-// ==========================================
-
-// 1. NowPlayingView (Components V2)
-function createNowPlayingV2(track: any, user: User, extra: string = '', overrideCover?: string | null): InteractionReplyOptions {
+// components v2 messages
+// 1. NowPlayingView -> createNowPlayingV2
+export function createNowPlayingV2(track: any, user: User, extra: string = '', overrideCover?: string | null): InteractionReplyOptions {
   const userHandle = `@${user.username}`;
   let trackCoverUrl = 'https://placehold.co/240x240/eaeaea/969696.png?text=no+cover';
 
   if (overrideCover) {
     trackCoverUrl = overrideCover;
-  } else if (track.info?.artworkUrl) {
-    trackCoverUrl = track.info.artworkUrl;
+  } else if (track.info?.artworkUrl || track.artworkUrl) {
+    trackCoverUrl = track.info?.artworkUrl || track.artworkUrl;
+  } else if (track.info?.artwork || track.artwork) {
+    trackCoverUrl = track.info?.artwork || track.artwork;
   }
 
-  const duration = formatDuration(track.info?.length || track.duration);
+  const durationMs = track.info?.length || track.duration || track.length;
+  const duration = formatDuration(durationMs);
 
   let trackTitle = track.info?.title || track.title || 'Unknown Title';
-  if ((!trackTitle || trackTitle === 'Unknown Title') && track.info?.uri?.includes('discordapp.com')) {
-    trackTitle = track.info.uri.split('/').pop()?.split('?')[0] || trackTitle;
+  const uri = track.info?.uri || track.uri || '';
+  if ((!trackTitle || trackTitle === 'Unknown Title') && uri.includes('discordapp.com')) {
+    trackTitle = uri.split('/').pop()?.split('?')[0] || trackTitle;
   }
 
   const author = track.info?.author || track.author;
   const artistName = author && author !== 'Unknown Artist' ? author : 'local asset';
-  const displayPrefix = track.info?.uri?.includes('discordapp.com') ? ' (file)' : extra;
+  const displayPrefix = uri.includes('discordapp.com') ? ' (file)' : extra;
 
-  const contentText = `- # now playing tape!${displayPrefix} - spooled by ${userHandle} 📼\n## ${trackTitle}\nartist: **${artistName}**\nduration: ${duration}`;
+  const nowPlayingText = `-# now playing!${displayPrefix} - requested by ${userHandle} :3`;
+  const trackMetadataText = `## ${trackTitle}\nartist: **${artistName}**\nduration: ${duration}`;
 
   return {
     flags: MessageFlags.IsComponentsV2 as any,
     components: [
       {
         type: 1, // Container Component
-        accent_color: 0x111111,
+        accent_color: 0xe6ba81,
         components: [
-          {
-            type: 10, // Text Display Component
-            content: contentText
-          },
-          {
-            type: 11, // Media Gallery Component
-            items: [{ media: { url: trackCoverUrl } }]
-          }
+          { type: 10, content: nowPlayingText },
+          { type: 11, items: [{ media: { url: trackCoverUrl } }] },
+          { type: 10, content: trackMetadataText }
         ]
       }
     ] as any
   };
 }
 
-// 2. QueuePopup (Components V2)
-function createQueuePopupV2(track: any, user: User, queueMessage: string, position?: number): InteractionReplyOptions {
+// 2. FilePlayingView -> createFilePlayingV2
+export function createFilePlayingV2(track: any, user: User, attachment: any, guildId?: string, hasCover: boolean = false): InteractionReplyOptions {
   const userHandle = `@${user.username}`;
-  const trackCoverUrl = track.info?.artworkUrl || track.artworkUrl || 'https://placehold.co/240x240/eaeaea/969696.png?text=no+cover';
-  const duration = formatDuration(track.info?.length || track.duration);
+  const durationMs = track.info?.length || track.duration || track.length;
+  const durationText = durationMs && durationMs > 0 ? formatDuration(durationMs) : '00:00';
+
+  const topText = `-# now playing! (file) - requested by ${userHandle} :3\n## ${attachment.name || attachment.filename}\nduration: ${durationText}`;
+  
+  let displayThumbnail = user.displayAvatarURL();
+  if (hasCover) {
+    const renderUrl = (process.env.RENDER_EXTERNAL_URL || '').replace(/\/$/, '');
+    const gId = guildId || 'default';
+    displayThumbnail = renderUrl ? `${renderUrl}/cache/${gId}_cover.png` : user.displayAvatarURL();
+  } else if (track.info?.artworkUrl || track.artworkUrl) {
+    displayThumbnail = track.info?.artworkUrl || track.artworkUrl;
+  } else if (track.info?.artwork || track.artwork) {
+    displayThumbnail = track.info?.artwork || track.artwork;
+  }
+
+  const layoutComponents: any[] = [
+    {
+      type: 9, // Section Component
+      components: [{ type: 10, content: topText }],
+      accessory: { type: 11, items: [{ media: { url: displayThumbnail } }] } 
+    }
+  ];
+
+  const trackTitle = track.info?.title || track.title;
+  const trackAuthor = track.info?.author || track.author;
+  const hasTitle = trackTitle && !trackTitle.startsWith('http') && trackTitle !== (attachment.name || attachment.filename);
+  const hasAuthor = trackAuthor && trackAuthor !== 'Unknown Artist' && trackAuthor !== '';
+
+  if (hasTitle || hasAuthor) {
+    const metaTitle = hasTitle ? trackTitle : 'unknown title';
+    const metaArtist = hasAuthor ? trackAuthor : 'unknown artist';
+    
+    layoutComponents.push({ type: 12 }); // Separator Component
+    layoutComponents.push({
+      type: 10, // Text Display Component
+      content: `## ${metaTitle}\nartist: **${metaArtist}**`
+    });
+  }
+
+  return {
+    flags: MessageFlags.IsComponentsV2 as any,
+    components: [
+      {
+        type: 1, // Container
+        accent_color: 0xf9c788,
+        components: layoutComponents
+      }
+    ] as any
+  };
+}
+
+// 3. QueuePopup -> createQueuePopupV2
+export function createQueuePopupV2(track: any, user: User, queueMessage: string, position?: number): InteractionReplyOptions {
+  const userHandle = `@${user.username}`;
+  let trackCoverUrl = 'https://placehold.co/240x240/eaeaea/969696.png?text=no+cover';
+  
+  if (track.info?.artworkUrl || track.artworkUrl) trackCoverUrl = track.info?.artworkUrl || track.artworkUrl;
+  else if (track.info?.artwork || track.artwork) trackCoverUrl = track.info?.artwork || track.artwork;
+
+  const durationMs = track.info?.length || track.duration || track.length;
+  const duration = formatDuration(durationMs);
+
   const indexStr = position ? `\nposition: #${position}` : '';
   const artistName = track.info?.author || track.author || 'unknown';
   const trackTitle = track.info?.title || track.title || 'Unknown Title';
 
-  const textMetadata = `- # spooled by ${userHandle}\n${queueMessage}\n# ${trackTitle}\nartist: **${artistName}**\nduration: ${duration}${indexStr}`;
+  const textMetadata = `-# requested by ${userHandle} :3\n${queueMessage}\n# ${trackTitle}\nartist: **${artistName}**\nduration: ${duration}${indexStr}`;
 
   return {
     flags: MessageFlags.IsComponentsV2 as any,
     components: [
       {
-        type: 1, // Container Component
-        accent_color: 0x2c2c2c,
+        type: 1,
+        accent_color: 0x5c9f05,
         components: [
           {
             type: 9, // Section Component
-            components: [
-              {
-                type: 10, // Text Display Component
-                content: textMetadata
-              }
-            ],
-            accessory: {
-              type: 11, // Media Gallery Component / Thumbnail Accessory
-              items: [{ media: { url: trackCoverUrl } }]
-            }
+            components: [{ type: 10, content: textMetadata }],
+            accessory: { type: 11, items: [{ media: { url: trackCoverUrl } }] }
           }
         ]
       }
@@ -184,88 +234,27 @@ function createQueuePopupV2(track: any, user: User, queueMessage: string, positi
   };
 }
 
-// 3. SongQueue (Components V2)
-function createSongQueueV2(player: any, user: User): InteractionReplyOptions {
-  const containerComponents: any[] = [];
-  let currentCover = 'https://placehold.co/240x240/eaeaea/969696.png?text=no+cover';
-
-  if (player.current) {
-    const current = player.current;
-    const currDuration = formatDuration(current.info?.length || current.duration);
-    const currTitle = current.info?.title || current.title || 'Unknown Title';
-    const currAuthor = current.info?.author || current.author || 'unknown';
-
-    if (current.info?.artworkUrl || current.artworkUrl) {
-      currentCover = current.info?.artworkUrl || current.artworkUrl;
-    }
-
-    const currentText = `## ${currTitle}\nartist: **${currAuthor}**\nduration: ${currDuration}\nposition: playing!`;
-
-    containerComponents.push({
-      type: 9, // Section Component
-      components: [
-        {
-          type: 10,
-          content: currentText
-        }
-      ],
-      accessory: {
-        type: 11,
-        items: [{ media: { url: currentCover } }]
-      }
-    });
-  }
-
-  const queueTracks = Array.isArray(player.queue?.tracks)
-    ? player.queue.tracks
-    : Array.isArray(player.queue)
-    ? player.queue
-    : [];
-
-  const limit = Math.min(queueTracks.length, 4);
-
-  for (let i = 0; i < limit; i++) {
-    const track = queueTracks[i];
-    const positionText = i === 0 ? 'up next!' : `#${i + 1}`;
-    const trackDuration = formatDuration(track.info?.length || track.duration);
-    const trackTitle = track.info?.title || track.title || 'Unknown Title';
-    const trackAuthor = track.info?.author || track.author || 'unknown';
-
-    containerComponents.push({
-      type: 10, // Text Display Component
-      content: `## ${trackTitle}\nartist: **${trackAuthor}**\nduration: ${trackDuration}\nposition: ${positionText}`
-    });
-  }
-
-  return {
-    flags: MessageFlags.IsComponentsV2 as any,
-    components: [
-      {
-        type: 1, // Container Component
-        accent_color: 0x111111,
-        components: containerComponents
-      }
-    ] as any
-  };
-}
-
-// 4. LoopStatusView (Components V2)
-function createLoopStatusV2(mode: 'current' | 'queue' | 'off', track: any, user: User): InteractionReplyOptions {
+// 4. LoopStatusView -> createLoopStatusV2
+export function createLoopStatusV2(mode: 'current' | 'queue' | 'off', track: any, user: User): InteractionReplyOptions {
   const userHandle = `@${user.username}`;
   let thumbnailUrl = user.displayAvatarURL();
   let cardText = '';
-  let accent = 0x111111;
+  let accent = 0xff0000;
 
   if (mode === 'current') {
-    thumbnailUrl = track?.info?.artworkUrl || track?.artworkUrl || 'https://placehold.co/240x240/eaeaea/969696.png?text=no+cover';
-    cardText = `- # spooled by ${userHandle}\n### tape loop: current track\nlooping current track continuously 📼`;
-    accent = 0x333333;
+    if (track && (track.info?.artworkUrl || track.artworkUrl || track.info?.artwork || track.artwork)) {
+      thumbnailUrl = track.info?.artworkUrl || track.artworkUrl || track.info?.artwork || track.artwork;
+    } else {
+      thumbnailUrl = 'https://placehold.co/240x240/eaeaea/969696.png?text=no+cover';
+    }
+    cardText = `-# requested by ${userHandle}\n### loop: current song\nthe current song will now loop forever :3`;
+    accent = 0x5c9f05;
   } else if (mode === 'queue') {
-    cardText = `- # spooled by ${userHandle}\n### tape loop: full spool\nlooping entire tape queue 🔄`;
-    accent = 0x222222;
+    cardText = `-# requested by ${userHandle}\n### loop: queue\nthe entire queue will now loop :o`;
+    accent = 0x85c2f0;
   } else {
-    cardText = `- # spooled by ${userHandle}\n### tape loop: off\nloop mechanism disengaged ⏹️`;
-    accent = 0x111111;
+    cardText = `-# requested by ${userHandle}\n### loop: off\nloop has been turned off :p`;
+    accent = 0xff0000;
   }
 
   return {
@@ -277,18 +266,86 @@ function createLoopStatusV2(mode: 'current' | 'queue' | 'off', track: any, user:
         components: [
           {
             type: 9, // Section Component
-            components: [
-              {
-                type: 10,
-                content: cardText
-              }
-            ],
-            accessory: {
-              type: 11,
-              items: [{ media: { url: thumbnailUrl } }]
-            }
+            components: [{ type: 10, content: cardText }],
+            accessory: { type: 11, items: [{ media: { url: thumbnailUrl } }] }
           }
         ]
+      }
+    ] as any
+  };
+}
+
+export function createSongQueueV2(player: any, user: User): InteractionReplyOptions {
+  const queueSections: any[] = [];
+
+  if (player.current) {
+    const currentTrack = player.current;
+    let currentCover = 'https://placehold.co/240x240/eaeaea/969696.png?text=no+cover';
+    
+    if (currentTrack.info?.artworkUrl || currentTrack.artworkUrl) {
+      currentCover = currentTrack.info?.artworkUrl || currentTrack.artworkUrl;
+    } else if (currentTrack.info?.artwork || currentTrack.artwork) {
+      currentCover = currentTrack.info?.artwork || currentTrack.artwork;
+    }
+
+    const durationMs = currentTrack.info?.length || currentTrack.duration || currentTrack.length;
+    let currDuration = '97:663? (unknown)';
+    if (durationMs) {
+      const minutes = Math.floor((durationMs / 1000) / 60);
+      const seconds = Math.floor((durationMs / 1000) % 60);
+      currDuration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    const artist = currentTrack.info?.author || currentTrack.author || 'unknown';
+    const title = currentTrack.info?.title || currentTrack.title || 'Unknown Title';
+
+    const currentText = `## ${title}\nartist: **${artist}**\nduration: ${currDuration}\nposition: playing!`;
+
+    queueSections.push({
+      type: 9, // section component
+      components: [{ type: 10, content: currentText }],
+      accessory: { type: 11, items: [{ media: { url: currentCover } }] }
+    });
+  }
+
+  const queueTracks = Array.isArray(player.queue?.tracks) ? player.queue.tracks : (Array.isArray(player.queue) ? player.queue : []);
+  const limit = Math.min(queueTracks.length, 4);
+
+  for (let i = 0; i < limit; i++) {
+    const track = queueTracks[i];
+    const positionText = i === 0 ? 'up next!' : `#${i + 1}`;
+    
+    let trackCover = 'https://placehold.co/240x240/eaeaea/969696.png?text=240+x+240';
+    if (track.info?.artworkUrl || track.artworkUrl) trackCover = track.info?.artworkUrl || track.artworkUrl;
+    else if (track.info?.artwork || track.artwork) trackCover = track.info?.artwork || track.artwork;
+
+    const durationMs = track.info?.length || track.duration || track.length;
+    let trackDuration = '97:663? (unknown)';
+    if (durationMs) {
+      const minutes = Math.floor((durationMs / 1000) / 60);
+      const seconds = Math.floor((durationMs / 1000) % 60);
+      trackDuration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    const artist = track.info?.author || track.author || 'unknown';
+    const title = track.info?.title || track.title || 'Unknown Title';
+
+    const trackText = `## ${title}\nartist: **${artist}**\nduration: ${trackDuration}\nposition: ${positionText}`;
+
+    queueSections.push({
+      type: 9,
+      components: [{ type: 10, content: trackText }],
+      accessory: { type: 11, items: [{ media: { url: trackCover } }] }
+    });
+  }
+
+  return {
+    flags: MessageFlags.IsComponentsV2 as any,
+    components: [
+      {
+        type: 1, // container component
+        accent_color: 0x2c2c2c,
+        components: queueSections
       }
     ] as any
   };
