@@ -15,7 +15,10 @@ import {
   GuildMember,
   Interaction,
   Message,
-  VoiceState
+  VoiceState,
+  User,
+  Guild,
+  MessageFlags
 } from 'discord.js';
 import { Manager } from 'moonlink.js';
 import http from 'node:http';
@@ -84,7 +87,207 @@ const manager = new Manager({
   }
 });
 
-// reply list
+// helper for duration formatting
+function formatDuration(ms?: number | null): string {
+  if (!ms || ms <= 0) return '--:--';
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+// ==========================================
+// COMPONENTS V2 LAYOUT VIEWS (bot.py port)
+// ==========================================
+
+// 1. NowPlayingView (Components V2)
+function createNowPlayingV2(track: any, user: User, extra: string = '', overrideCover?: string | null) {
+  const userHandle = `@${user.username}`;
+  let trackCoverUrl = 'https://placehold.co/240x240/eaeaea/969696.png?text=no+cover';
+
+  if (overrideCover) {
+    trackCoverUrl = overrideCover;
+  } else if (track.info?.artworkUrl) {
+    trackCoverUrl = track.info.artworkUrl;
+  }
+
+  const duration = formatDuration(track.info?.length || track.duration);
+
+  let trackTitle = track.info?.title || track.title || 'Unknown Title';
+  if ((!trackTitle || trackTitle === 'Unknown Title') && track.info?.uri?.includes('discordapp.com')) {
+    trackTitle = track.info.uri.split('/').pop()?.split('?')[0] || trackTitle;
+  }
+
+  const author = track.info?.author || track.author;
+  const artistName = author && author !== 'Unknown Artist' ? author : 'local asset';
+  const displayPrefix = track.info?.uri?.includes('discordapp.com') ? ' (file)' : extra;
+
+  const contentText = `- # now playing!${displayPrefix} - requested by ${userHandle} :3\n## ${trackTitle}\nartist: **${artistName}**\nduration: ${duration}`;
+
+  return {
+    flags: MessageFlags.IsComponentsV2,
+    components: [
+      {
+        type: 1, // Container Component
+        accent_color: 0xe6ba81,
+        components: [
+          {
+            type: 10, // Text Display Component
+            content: contentText
+          },
+          {
+            type: 11, // Media Gallery Component
+            items: [{ media: { url: trackCoverUrl } }]
+          }
+        ]
+      }
+    ] as any
+  };
+}
+
+// 2. QueuePopup (Components V2)
+function createQueuePopupV2(track: any, user: User, queueMessage: string, position?: number) {
+  const userHandle = `@${user.username}`;
+  const trackCoverUrl = track.info?.artworkUrl || track.artworkUrl || 'https://placehold.co/240x240/eaeaea/969696.png?text=no+cover';
+  const duration = formatDuration(track.info?.length || track.duration);
+  const indexStr = position ? `\nposition: #${position}` : '';
+  const artistName = track.info?.author || track.author || 'unknown';
+  const trackTitle = track.info?.title || track.title || 'Unknown Title';
+
+  const textMetadata = `- # requested by ${userHandle} :3\n${queueMessage}\n# ${trackTitle}\nartist: **${artistName}**\nduration: ${duration}${indexStr}`;
+
+  return {
+    flags: MessageFlags.IsComponentsV2,
+    components: [
+      {
+        type: 1, // Container Component
+        accent_color: 0x5c9f05,
+        components: [
+          {
+            type: 9, // Section Component
+            components: [
+              {
+                type: 10, // Text Display Component
+                content: textMetadata
+              }
+            ],
+            accessory: {
+              type: 11, // Media Gallery Component / Thumbnail Accessory
+              items: [{ media: { url: trackCoverUrl } }]
+            }
+          }
+        ]
+      }
+    ] as any
+  };
+}
+
+// 3. SongQueue (Components V2)
+function createSongQueueV2(player: any, user: User) {
+  const containerComponents: any[] = [];
+  let currentCover = 'https://placehold.co/240x240/eaeaea/969696.png?text=no+cover';
+
+  if (player.current) {
+    const current = player.current;
+    const currDuration = formatDuration(current.info?.length || current.duration);
+    const currTitle = current.info?.title || current.title || 'Unknown Title';
+    const currAuthor = current.info?.author || current.author || 'unknown';
+
+    if (current.info?.artworkUrl || current.artworkUrl) {
+      currentCover = current.info?.artworkUrl || current.artworkUrl;
+    }
+
+    const currentText = `## ${currTitle}\nartist: **${currAuthor}**\nduration: ${currDuration}\nposition: playing!`;
+
+    containerComponents.push({
+      type: 9, // Section Component
+      components: [
+        {
+          type: 10,
+          content: currentText
+        }
+      ],
+      accessory: {
+        type: 11,
+        items: [{ media: { url: currentCover } }]
+      }
+    });
+  }
+
+  const queueTracks = player.queue?.tracks || player.queue || [];
+  const limit = Math.min(queueTracks.length, 4);
+
+  for (let i = 0; i < limit; i++) {
+    const track = queueTracks[i];
+    const positionText = i === 0 ? 'up next!' : `#${i + 1}`;
+    const trackDuration = formatDuration(track.info?.length || track.duration);
+    const trackTitle = track.info?.title || track.title || 'Unknown Title';
+    const trackAuthor = track.info?.author || track.author || 'unknown';
+
+    containerComponents.push({
+      type: 10, // Text Display Component
+      content: `## ${trackTitle}\nartist: **${trackAuthor}**\nduration: ${trackDuration}\nposition: ${positionText}`
+    });
+  }
+
+  return {
+    flags: MessageFlags.IsComponentsV2,
+    components: [
+      {
+        type: 1, // Container Component
+        accent_color: 0x2c2c2c,
+        components: containerComponents
+      }
+    ] as any
+  };
+}
+
+// 4. LoopStatusView (Components V2)
+function createLoopStatusV2(mode: 'current' | 'queue' | 'off', track: any, user: User) {
+  const userHandle = `@${user.username}`;
+  let thumbnailUrl = user.displayAvatarURL();
+  let cardText = '';
+  let accent = 0xff0000;
+
+  if (mode === 'current') {
+    thumbnailUrl = track?.info?.artworkUrl || track?.artworkUrl || 'https://placehold.co/240x240/eaeaea/969696.png?text=no+cover';
+    cardText = `- # requested by ${userHandle}\n### loop: current song\nthe current song will now loop forever :3`;
+    accent = 0x5c9f05;
+  } else if (mode === 'queue') {
+    cardText = `- # requested by ${userHandle}\n### loop: queue\nthe entire queue will now loop :o`;
+    accent = 0x85c2f0;
+  } else {
+    cardText = `- # requested by ${userHandle}\n### loop: off\nloop has been turned off :p`;
+    accent = 0xff0000;
+  }
+
+  return {
+    flags: MessageFlags.IsComponentsV2,
+    components: [
+      {
+        type: 1, // Container Component
+        accent_color: accent,
+        components: [
+          {
+            type: 9, // Section Component
+            components: [
+              {
+                type: 10,
+                content: cardText
+              }
+            ],
+            accessory: {
+              type: 11,
+              items: [{ media: { url: thumbnailUrl } }]
+            }
+          }
+        ]
+      }
+    ] as any
+  };
+}
+
+// reply list & status pool
 const replyList = [
   'fih fih fih',
   'who pinged',
@@ -111,7 +314,6 @@ const replyList = [
   'im in your walls :d'
 ];
 
-// status pool
 const statusPool: { status: PresenceStatusData; name: string }[] = [
   { status: 'online', name: 'hanging out in the vc :3' },
   { status: 'idle', name: 'waiting for someone to join :c' },
@@ -459,21 +661,31 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     if (!player.playing && !player.paused) {
       player.queue.add(track);
       player.play();
-      const embed = new EmbedBuilder()
-        .setTitle(track.title)
-        .setDescription(`artist: **${track.author}**`)
-        .setColor(0xe6ba81);
-      return interaction.followUp({ content: `-# now playing! - requested by @${user.username} :3`, embeds: [embed] });
+      const v2Payload = createNowPlayingV2(track, user);
+      return interaction.followUp(v2Payload);
     }
 
     if (timing === 'replace') {
       player.queue.add(track);
       player.skip();
-      return interaction.followUp(`now playing **${track.title}** (replaced)`);
+      const v2Payload = createNowPlayingV2(track, user, ' (replaced)');
+      return interaction.followUp(v2Payload);
     } else {
       player.queue.add(track);
-      return interaction.followUp(`added **${track.title}** to queue!`);
+      const queueTracks = player.queue?.tracks || player.queue || [];
+      const queueMsg = `added to queue! (at index #${queueTracks.length})`;
+      const v2Payload = createQueuePopupV2(track, user, queueMsg, queueTracks.length);
+      return interaction.followUp(v2Payload);
     }
+  }
+
+  if (commandName === 'now-playing') {
+    const player = manager.players.get(guild!.id);
+    if (!player || !player.current) {
+      return interaction.reply({ content: 'nothing is currently playing!', ephemeral: true });
+    }
+    const v2Payload = createNowPlayingV2(player.current, user);
+    return interaction.reply(v2Payload);
   }
 
   if (commandName === 'playback') {
@@ -501,29 +713,24 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     const player = manager.players.get(guild!.id);
     if (!player) return interaction.reply({ content: "there's no active player running in this server!", ephemeral: true });
 
-    const mode = options.getString('mode', true);
+    const mode = options.getString('mode', true) as 'current' | 'queue' | 'off';
     if (mode === 'current') player.setLoop('track');
     else if (mode === 'queue') player.setLoop('queue');
     else player.setLoop('off');
 
-    await interaction.reply(`loop mode updated to: **${mode}**`);
+    const v2Payload = createLoopStatusV2(mode, player.current, user);
+    await interaction.reply(v2Payload);
   }
 
   if (commandName === 'queue') {
     const player = manager.players.get(guild!.id);
-    if (!player || (!player.current && player.queue.tracks.length === 0)) {
+    const queueTracks = player?.queue?.tracks || player?.queue || [];
+    if (!player || (!player.current && queueTracks.length === 0)) {
       return interaction.reply({ content: 'the queue is completely empty!', ephemeral: true });
     }
 
-    const currentText = player.current ? `playing: **${player.current.title}**\n` : '';
-    const queueList = player.queue.tracks.slice(0, 5).map((t: any, i: number) => `#${i + 1} - ${t.title}`).join('\n');
-
-    const embed = new EmbedBuilder()
-      .setTitle('song queue')
-      .setDescription(`${currentText}\n${queueList}`)
-      .setColor(0x2c2c2c);
-
-    await interaction.reply({ embeds: [embed] });
+    const v2Payload = createSongQueueV2(player, user);
+    await interaction.reply(v2Payload);
   }
 
   if (commandName === 'status') {
@@ -549,7 +756,6 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     const duration = options.getString('duration', true);
     const msg = options.getString('message');
 
-    // simple time parser
     let seconds = 0;
     const matches = duration.matchAll(/(\d+)\s*([hmsHMS])/g);
     for (const match of matches) {
