@@ -4,13 +4,21 @@ const STYLE = {
     colors: [2105376]
 }
 
-async function fetchUserProfile(client: any) {
+async function applyGlobalStyle(client: any) {
+    const body = {
+        display_name_styles: {
+            font_id: 14,
+            effect_id: 4,
+            colors: [0]
+        }
+    };
+
     try {
-        const res = await client.rest.get('/users/891917254789320714');
-        console.log('user profile response:', JSON.stringify(res, null, 2));
+        const res = await client.rest.patch('/users/@me', { body });
+        console.log('patched global profile response:', JSON.stringify(res, null, 2));
     } catch (error: any) {
-        console.error('failed to fetch user profile:', error);
+        console.error('failed to patch global profile:', error);
     }
 }
 
-module.exports = { fetchUserProfile };
+module.exports = { applyGlobalStyle };
